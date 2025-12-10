@@ -1,0 +1,12 @@
+{
+  "name": "cosilico",
+  "version": "0.1.0",
+  "description": "Encode tax and benefit law into executable DSL with multi-system validation",
+  "author": {
+    "name": "Cosilico",
+    "url": "https://cosilico.ai"
+  },
+  "repository": "https://github.com/CosilicoAI/cosilico-claude",
+  "license": "MIT",
+  "keywords": ["tax", "benefits", "policy", "encoding", "dsl", "validation"]
+}
