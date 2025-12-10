@@ -2,11 +2,22 @@
   "name": "cosilico",
   "version": "0.1.0",
   "description": "Encode tax and benefit law into executable DSL with multi-system validation",
-  "author": {
-    "name": "Cosilico",
-    "url": "https://cosilico.ai"
-  },
-  "repository": "https://github.com/CosilicoAI/cosilico-claude",
-  "license": "MIT",
-  "keywords": ["tax", "benefits", "policy", "encoding", "dsl", "validation"]
+  "homepage": "https://github.com/CosilicoAI/cosilico-claude",
+  "commands": [
+    {
+      "name": "encode",
+      "description": "Encode a tax/benefit statute section into Cosilico DSL with validation",
+      "path": "commands/encode.md"
+    },
+    {
+      "name": "validate",
+      "description": "Validate encoded policy against multiple tax/benefit systems",
+      "path": "commands/validate.md"
+    },
+    {
+      "name": "file-bug",
+      "description": "File an upstream bug report when validation reveals discrepancies",
+      "path": "commands/file-bug.md"
+    }
+  ]
 }
