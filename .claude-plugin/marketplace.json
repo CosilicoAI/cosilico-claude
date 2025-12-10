@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cosilico",
+  "owner": {
+    "name": "Cosilico"
+  },
+  "plugins": [
+    {
+      "name": "cosilico",
+      "source": "./",
+      "description": "Encode tax and benefit law into executable DSL with multi-system validation",
+      "version": "0.1.0"
+    }
+  ]
+}
