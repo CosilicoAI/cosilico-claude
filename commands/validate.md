@@ -1,11 +1,6 @@
 ---
-name: validate
-description: Validate encoded policy against multiple tax/benefit systems
-allowed_tools:
-  - Read
-  - Bash
-  - Grep
-  - Glob
+description: "Validate encoded policy against multiple tax/benefit systems"
+argument-hint: "<tests.yaml> or <variable>"
 ---
 
 # Validate Policy Command

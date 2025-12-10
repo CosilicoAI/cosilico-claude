@@ -1,15 +1,6 @@
 ---
-name: encode
-description: Encode a tax/benefit statute section into Cosilico DSL with validation
-allowed_tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Grep
-  - Glob
-  - WebFetch
-  - WebSearch
+description: "Encode a tax/benefit statute section into Cosilico DSL with validation"
+argument-hint: "<citation> (e.g., '26 USC 32' for EITC)"
 ---
 
 # Encode Policy Command

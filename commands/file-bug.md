@@ -1,10 +1,6 @@
 ---
-name: file-bug
-description: File an upstream bug report when validation reveals discrepancies
-allowed_tools:
-  - Read
-  - Bash
-  - WebFetch
+description: "File an upstream bug report when validation reveals discrepancies"
+argument-hint: "<description of bug>"
 ---
 
 # File Upstream Bug Command
