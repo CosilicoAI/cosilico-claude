@@ -54,11 +54,11 @@ reference "26 USC 32(a)(1)"
 
 formula:
   # Phase-in region
-  if earned_income <= phase_in_end then
+  if earned_income <= phase_in_end:
     return earned_income * phase_in_rate
 
   # Plateau region
-  if earned_income <= phase_out_start then
+  if earned_income <= phase_out_start:
     return max_credit
 
   # Phase-out region
@@ -66,9 +66,9 @@ formula:
 ```
 
 Key syntax rules:
-- `if condition then` (not `if condition:`)
-- Multi-line conditionals: `if x then\n  value\nelse\n  other`
-- Inline ternary: `x if condition else y`
+- `if condition:` (Python-style, not `if condition then`)
+- Multi-line: `if x:\n  return value`
+- Inline: `if x: value else other`
 - No braces - use indentation
 - `imports:` block with colon, indented items
 
