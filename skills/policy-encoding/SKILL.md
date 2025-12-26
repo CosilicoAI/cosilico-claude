@@ -1,171 +1,156 @@
 ---
 name: Policy Encoding
 description: Use this skill when encoding tax/benefit statutes into executable code, creating test cases for policy rules, or validating implementations against authoritative calculators
-version: 1.0.0
+version: 2.0.0
 ---
 
 # Policy Encoding Skill
 
 This skill provides patterns and guidance for encoding tax and benefit law into executable DSL code.
 
-## When to Use This Skill
+## ⚠️ CRITICAL: Where Encodings Go
 
-- User asks to "encode" a statute or policy
-- User mentions tax credits (EITC, CTC, etc.) or benefits (SNAP, Medicaid)
-- User wants to validate policy implementations
-- User is working in lawarchive or cosilico repositories
+**ALL statute encodings MUST go in `cosilico-us`:**
 
-## Key Repositories
+```
+~/CosilicoAI/cosilico-us/statute/
+├── 26/           # Title 26 - Internal Revenue Code
+│   ├── 1/        # § 1 - Tax rates
+│   ├── 24/       # § 24 - Child Tax Credit
+│   ├── 32/       # § 32 - EITC
+│   ├── 36B/      # § 36B - Premium Tax Credit
+│   ├── 62/       # § 62 - AGI
+│   ├── 63/       # § 63 - Standard Deduction
+│   ├── 199A/     # § 199A - QBI Deduction
+│   ├── 1401/     # § 1401 - SE Tax
+│   ├── 1411/     # § 1411 - NIIT
+│   └── 3101/     # § 3101 - Medicare Tax
+└── 7/            # Title 7 - Agriculture (SNAP)
+    └── 2017/     # SNAP allotment
+```
 
-| Repo | Purpose | Location |
-|------|---------|----------|
-| `cosilico-lawarchive` | Raw statutes + encoded formulas | `~/CosilicoAI/cosilico-lawarchive` |
-| `cosilico-validators` | Multi-system validation | `~/CosilicoAI/cosilico-validators` |
-| `cosilico-engine` | DSL parser + executor | `~/CosilicoAI/cosilico-engine` |
+**NEVER put encodings in:**
+- ❌ `cosilico-engine` - Only DSL parser/executor
+- ❌ `cosilico-validators` - Only validation infrastructure
+- ❌ `cosilico-lawarchive` - Only raw source documents
+
+## ⚠️ CRITICAL: Validation Requirement
+
+**ALL encodings MUST be validated on full CPS microdata:**
+
+```python
+# In cosilico-validators
+from cosilico_validators.cps.runner import CPSValidationRunner
+
+runner = CPSValidationRunner(year=2024)
+results = runner.run()  # Runs on ~100k+ households
+```
+
+**NEVER validate with just hand-crafted test cases.** The CPS validation:
+- Tests on real income distributions
+- Catches edge cases you'd never think of
+- Compares against PolicyEngine AND TAXSIM
+- Reports match rates with statistical significance
 
 ## Encoding Workflow
 
-### Step 1: Fetch Statute
+### Step 1: Create .cosilico File in cosilico-us
+
 ```bash
-# Check if already in lawarchive
-ls ~/CosilicoAI/cosilico-lawarchive/statutes/26/32/
+# Create directory structure matching statute
+mkdir -p ~/CosilicoAI/cosilico-us/statute/26/1411/
 
-# If not, fetch from official source
-# uscode.house.gov has USLM XML
-# Cornell LII has readable HTML
-```
+# Create the encoding file
+cat > ~/CosilicoAI/cosilico-us/statute/26/1411/net_investment_income_tax.cosilico << 'EOF'
+# Net Investment Income Tax
+# Citation: 26 USC § 1411
 
-### Step 2: Analyze Structure
-Parse the statute to identify:
-- **Definitions** (§32(c) - qualifying child, earned income)
-- **Calculation rules** (§32(a) - credit = phase_in - phase_out)
-- **Parameters** (§32(b) - rates, thresholds by filing status)
-- **Indexing** (§32(j) - CPI adjustment rules)
+@entity: TaxUnit
+@period: Year
+@dtype: Money
 
-### Step 3: Create Variables
-One variable per distinct concept:
-```
-eitc_phase_in_rate          # §32(b)(1)(A)
-eitc_maximum_credit         # §32(b)(2)(A)
-eitc_phase_out_threshold    # §32(b)(2)(A)
-eitc_phase_out_rate         # §32(b)(1)(B)
-eitc                        # §32(a) - main credit
-```
-
-### Step 4: Write Formulas
-Match statute language exactly:
-```python
-# "The credit percentage is 34 percent in the case of
-#  an eligible individual with 1 qualifying child"
-# Citation: 26 USC § 32(b)(1)(A)
-credit_percentage = where(
-    num_children == 1, 0.34,
-    where(num_children == 2, 0.40,
-    where(num_children >= 3, 0.45,
-    0.0765))  # No children
+net_investment_income_tax = (
+    # 3.8% of lesser of NII or excess MAGI
+    0.038 * min(
+        net_investment_income,
+        max(0, modified_adjusted_gross_income - niit_threshold)
+    )
 )
+EOF
 ```
 
-### Step 5: Create Parameters
-Extract all numeric values:
-```yaml
-# parameters/eitc.yaml
-eitc:
-  phase_in_rate:
-    0_children: 0.0765
-    1_child: 0.34
-    2_children: 0.40
-    3_plus_children: 0.45
-  maximum_credit:
-    2024:
-      0_children: 632
-      1_child: 4213
-      # ...
+### Step 2: Add to CPSValidationRunner
+
+Edit `cosilico-validators/src/cosilico_validators/cps/runner.py`:
+
+```python
+VARIABLES = [
+    # ... existing variables ...
+    VariableConfig(
+        name="niit",
+        section="26/1411",
+        title="Net Investment Income Tax",
+        cosilico_file="statute/26/1411/net_investment_income_tax.cosilico",
+        cosilico_variable="net_investment_income_tax",
+        pe_variable="net_investment_income_tax",
+        taxsim_variable=None,  # TAXSIM doesn't have NIIT
+    ),
+]
 ```
 
-### Step 6: Build Test Suite
-Cover all paths:
-```yaml
-test_cases:
-  # Phase-in region
-  - name: "EITC phase-in, 1 child"
-    inputs: {earned_income: 10000, children: 1}
-    expected: {eitc: 3400}
+### Step 3: Run Full CPS Validation
 
-  # Plateau
-  - name: "EITC maximum, 1 child"
-    inputs: {earned_income: 15000, children: 1}
-    expected: {eitc: 4213}
-
-  # Phase-out
-  - name: "EITC phase-out, 1 child"
-    inputs: {earned_income: 40000, children: 1}
-    expected: {eitc: 1500}
-
-  # Zero credit
-  - name: "EITC zero, income too high"
-    inputs: {earned_income: 60000, children: 1}
-    expected: {eitc: 0}
-```
-
-### Step 7: Validate
-Run against PolicyEngine:
 ```bash
 cd ~/CosilicoAI/cosilico-validators
 source .venv/bin/activate
-python -c "
-from cosilico_validators import ConsensusEngine, TestCase
-from cosilico_validators.validators.policyengine import PolicyEngineValidator
 
-engine = ConsensusEngine([PolicyEngineValidator()])
-# ... run tests
+python -c "
+from cosilico_validators.cps.runner import CPSValidationRunner
+
+runner = CPSValidationRunner(year=2024)
+results = runner.run()
+
+# Check results
+for name, result in results.items():
+    if result.pe_comparison:
+        print(f'{name}: {result.pe_comparison.match_rate:.1%} match')
 "
 ```
 
-## Common Tax Credits
+### Step 4: Iterate Until >99% Match
 
-| Credit | Statute | Key Variables |
-|--------|---------|---------------|
-| EITC | 26 USC § 32 | `eitc`, `eitc_phase_in`, `eitc_phase_out` |
-| CTC | 26 USC § 24 | `ctc`, `ctc_refundable`, `ctc_nonrefundable` |
-| CDCTC | 26 USC § 21 | `cdctc`, `cdctc_eligible_expenses` |
-| AOTC | 26 USC § 25A | `aotc`, `aotc_refundable` |
-| Saver's Credit | 26 USC § 25B | `savers_credit` |
+If match rate is low:
+1. Check mismatch examples in `result.pe_comparison.mismatches`
+2. Fix formula logic
+3. Re-run CPS validation
+4. Repeat until >99% match rate
 
-## Common Benefit Programs
+## Key Repositories
 
-| Program | Authority | Key Variables |
-|---------|-----------|---------------|
-| SNAP | 7 USC § 2011 et seq. | `snap`, `snap_gross_income_limit` |
-| Medicaid | 42 USC § 1396 | `medicaid_eligible`, `medicaid_income_limit` |
-| TANF | 42 USC § 601 | `tanf`, `tanf_eligible` |
-| SSI | 42 USC § 1381 | `ssi`, `ssi_countable_income` |
+| Repo | Purpose | Encodings? |
+|------|---------|------------|
+| `cosilico-us` | **US federal statutes** | ✅ YES |
+| `cosilico-validators` | Validation infrastructure | ❌ NO |
+| `cosilico-engine` | DSL parser/executor | ❌ NO |
+| `cosilico-lawarchive` | Raw source documents | ❌ NO |
+
+## Common Tax Variables
+
+| Variable | Statute | File Path |
+|----------|---------|-----------|
+| EITC | 26 USC § 32 | `statute/26/32/a/1/earned_income_credit.cosilico` |
+| CTC | 26 USC § 24 | `statute/26/24/child_tax_credit.cosilico` |
+| Standard Deduction | 26 USC § 63 | `statute/26/63/standard_deduction.cosilico` |
+| NIIT | 26 USC § 1411 | `statute/26/1411/net_investment_income_tax.cosilico` |
+| Additional Medicare | 26 USC § 3101(b)(2) | `statute/26/3101/b/2/additional_medicare_tax.cosilico` |
+| QBI Deduction | 26 USC § 199A | `statute/26/199A/qualified_business_income_deduction.cosilico` |
+| Premium Tax Credit | 26 USC § 36B | `statute/26/36B/premium_tax_credit.cosilico` |
 
 ## Quality Checklist
 
+- [ ] Encoding is in `cosilico-us/statute/` (NOT engine, validators, or lawarchive)
+- [ ] CPS validation run on full microdata (NOT just hand-crafted test cases)
+- [ ] Match rate >99% against PolicyEngine
 - [ ] Every formula cites statute subsection
 - [ ] No hardcoded dollar amounts (use parameters)
-- [ ] Inflation indexing encoded as rule, not value
-- [ ] Test cases cover phase-in, plateau, phase-out
-- [ ] Test cases cover all filing statuses
-- [ ] Validation achieves FULL_AGREEMENT
-- [ ] Edge cases tested (exact thresholds, zero values)
-
-## Troubleshooting
-
-**Validation fails with DISAGREEMENT:**
-1. Check formula logic against statute text
-2. Verify parameter values for the test year
-3. Check if PolicyEngine has known issues for this variable
-4. Try different test inputs to isolate the discrepancy
-
-**POTENTIAL_UPSTREAM_BUG detected:**
-1. Document the discrepancy
-2. Check PolicyEngine GitHub issues
-3. If new, file issue with test case details
-4. Use `cosilico-validators file-issues` command
-
-**Inflation indexing mismatch:**
-1. Verify base year and CPI values
-2. Check rounding rules (nearest $10, $50, etc.)
-3. Confirm which CPI measure is used (CPI-U vs C-CPI-U)
+- [ ] Variable added to CPSValidationRunner.VARIABLES
