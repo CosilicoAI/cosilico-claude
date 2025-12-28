@@ -154,3 +154,71 @@ If match rate is low:
 - [ ] Every formula cites statute subsection
 - [ ] No hardcoded dollar amounts (use parameters)
 - [ ] Variable added to CPSValidationRunner.VARIABLES
+- [ ] Inflation indexing encoded as rule, not value
+- [ ] Test cases cover phase-in, plateau, phase-out
+- [ ] Test cases cover all filing statuses
+- [ ] Validation achieves FULL_AGREEMENT
+- [ ] Edge cases tested (exact thresholds, zero values)
+
+## Phase-In/Phase-Out Validation (CRITICAL)
+
+For credits with phase-in and phase-out regions, **verify these are DIFFERENT rates**:
+
+| Credit | Phase-In Rate | Phaseout Rate | Relationship |
+|--------|--------------|---------------|--------------|
+| EITC (1 child) | 34% | 15.98% | Different! |
+| EITC (2 children) | 40% | 21.06% | Different! |
+| EITC (3+ children) | 45% | 21.06% | Different! |
+| EITC (0 children) | 7.65% | 7.65% | Same (special case) |
+
+### Reference Point Validation
+
+**ALWAYS verify these reference points before completing encoding:**
+
+1. **At phase-in threshold**: Credit should equal max_credit
+   ```
+   earned = earned_income_threshold
+   → credit = min(max_credit, earned × phase_in_rate) = max_credit
+   ```
+
+2. **At phase-out end**: Credit should equal zero
+   ```
+   earned = phase_out_end
+   → credit = max(0, max_credit - (earned - phase_out_start) × phaseout_rate) = 0
+   ```
+
+### Rate Derivation Check
+
+**Phase-in rate = max_credit / earned_income_threshold**
+
+Example (EITC 1 child, 2024):
+- max_credit = $4,213
+- earned_income_threshold = $12,391
+- phase_in_rate = 4213/12391 = 0.34 (34%)
+
+If your formula uses a DIFFERENT rate for phase-in than this derivation, you have a bug.
+
+### Bug Prevention: Experiment 2025-12-27T1530
+
+This validation section was added after discovering a bug where `phaseout_rate` was
+incorrectly used for phase-in calculations. This caused a -$9.2B gap vs PolicyEngine.
+See `cosilico-encoder/optimization/runs/2025-12-27T1530.yaml`.
+
+## Troubleshooting
+
+**Validation fails with DISAGREEMENT:**
+1. Check formula logic against statute text
+2. Verify parameter values for the test year
+3. Check if PolicyEngine has known issues for this variable
+4. Try different test inputs to isolate the discrepancy
+
+**POTENTIAL_UPSTREAM_BUG detected:**
+1. Document the discrepancy
+2. Check PolicyEngine GitHub issues
+3. If new, file issue with test case details
+4. Use `cosilico-validators file-issues` command
+
+**Inflation indexing mismatch:**
+1. Verify base year and CPI values
+2. Check rounding rules (nearest $10, $50, etc.)
+3. Confirm which CPI measure is used (CPI-U vs C-CPI-U)
