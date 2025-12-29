@@ -14,16 +14,31 @@ Fetch policy documents from official sources and organize them in the arch repos
 
 ## Priority Sources (Primary > Secondary)
 
-1. **Federal Statutes**: uscode.house.gov (USLM XML)
-2. **Federal Regulations**: ecfr.gov (XML), federalregister.gov
-3. **IRS Guidance**: irs.gov/pub/ (PDFs - Rev Procs, Rev Rulings, Notices)
-4. **SNAP/Food Assistance**: fns.usda.gov (COLA, allotments, deductions)
-5. **TANF**: acf.gov/ofa (caseload, expenditure, policy guidance)
-6. **LIHEAP**: acf.gov/ocs (SMI tables, funding allocations)
-7. **Medicaid**: medicaid.gov (eligibility, SMD letters)
-8. **Poverty Guidelines**: aspe.hhs.gov
-9. **State Statutes**: Official state legislature sites (not law.justia.com unless unavailable)
-10. **State Policy Manuals**: State agency websites
+### US Federal
+
+| Program | Source | URL Pattern | Format |
+|---------|--------|-------------|--------|
+| **US Code** | uscode.house.gov | `/download/releasepoints/us/pl/118/usc{title}.xml` | USLM XML |
+| **CFR** | ecfr.gov | `/api/versioner/v1/full/{date}/title-{n}.xml` | XML |
+| **IRS Guidance** | irs.gov | `/pub/irs-drop/{type}-{year}-{num}.pdf` | PDF |
+| **SNAP COLA** | fns.usda.gov | `/sites/default/files/resource-files/snap-fy{yy}-*.pdf` | PDF |
+| **TANF Data** | acf.gov | `/sites/default/files/documents/ofa/fy{year}_tanf_*.pdf` | PDF/XLSX |
+| **LIHEAP SMI** | acf.gov | `/sites/default/files/documents/ocs/COMM_LIHEAP_IM*.pdf` | PDF |
+| **Poverty Guidelines** | aspe.hhs.gov | `/sites/default/files/documents/*/detailed-guidelines-{year}.pdf` | PDF |
+| **Medicaid** | medicaid.gov | `/sites/default/files/*.pdf` | PDF |
+
+### International
+
+| Jurisdiction | Source | URL Pattern | Format |
+|--------------|--------|-------------|--------|
+| **Canada** | laws-lois.justice.gc.ca | `/eng/XML/{code}.xml` | XML |
+| **UK** | legislation.gov.uk | `/ukpga/{year}/{num}/data.xml` | CLML XML |
+
+### State Sources
+
+Use PolicyEngine-US parameter references (`sources/policyengine-us/state_references.txt`) for state-specific URLs. Key domains:
+- `ftb.ca.gov` (CA), `tax.ny.gov` (NY), `revenue.state.mn.us` (MN)
+- `mass.gov` (MA), `michigan.gov` (MI), `tax.virginia.gov` (VA)
 
 ## Output Structure
 
@@ -57,16 +72,50 @@ All files go in `~/.arch/` organized by jurisdiction and source:
 5. **Organize** - Place in correct directory structure
 6. **Report** - Provide summary of files downloaded
 
-## Download Pattern
+## Download Patterns
 
+### SNAP COLA (FY26)
 ```bash
-# Create directory
-mkdir -p ~/.arch/{jurisdiction}/{source}
+mkdir -p ~/.arch/federal/fns
+cd ~/.arch/federal/fns
+curl -sLO "https://www.fns.usda.gov/sites/default/files/resource-files/snap-cola-fy26memo.pdf"
+curl -sLO "https://www.fns.usda.gov/sites/default/files/resource-files/snap-fy26-incomeEligibilityStandards.pdf"
+curl -sLO "https://www.fns.usda.gov/sites/default/files/resource-files/snap-fy26maximumAllotments-deductions.pdf"
+```
 
-# Download with rate limiting
-cd ~/.arch/{jurisdiction}/{source}
-curl -sL -o "filename.pdf" "url" --connect-timeout 30
-sleep 0.5  # Rate limit
+### TANF Data (from ACF)
+```bash
+mkdir -p ~/.arch/federal/acf/tanf/caseload
+cd ~/.arch/federal/acf/tanf/caseload
+curl -sLO "https://acf.gov/sites/default/files/documents/ofa/fy2024_tanf_caseload.pdf"
+curl -sLO "https://acf.gov/sites/default/files/documents/ofa/fy2024_tanf_caseload.xlsx"
+```
+
+### LIHEAP SMI Tables
+```bash
+mkdir -p ~/.arch/federal/acf/liheap
+cd ~/.arch/federal/acf/liheap
+curl -sLO "https://acf.gov/sites/default/files/documents/ocs/COMM_LIHEAP_IM2025-02_SMIStateTable_Att4.pdf"
+curl -sLO "https://acf.gov/sites/default/files/documents/ocs/COMM_LIHEAP_IM2025-02_FPGSte-Table_Att2.pdf"
+```
+
+### Canada Federal Acts
+```bash
+mkdir -p ~/.arch/canada
+# Enumerate from https://laws-lois.justice.gc.ca/eng/acts/{A-Z}.html
+curl -sLO "https://laws-lois.justice.gc.ca/eng/XML/I-3.3.xml"  # Income Tax Act
+```
+
+### UK Public General Acts
+```bash
+mkdir -p ~/.arch/uk/ukpga
+# Use legislation.gov.uk Atom feed: /ukpga/new/data.feed
+curl -sLO "https://www.legislation.gov.uk/ukpga/2024/1/data.xml"
+```
+
+### Rate Limiting
+```bash
+sleep 0.5  # Between requests to same domain
 ```
 
 ## Validation
