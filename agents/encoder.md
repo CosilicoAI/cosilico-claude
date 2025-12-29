@@ -12,13 +12,42 @@ You encode tax and benefit law into executable Cosilico DSL.
 
 Read statute text and produce correct DSL encodings. You do NOT write tests or validate - a separate validator agent does that to avoid confirmation bias.
 
+## ⚠️ CRITICAL: Filepath = Citation
+
+**The filepath IS the legal citation.** This is the most important rule.
+
+```
+statute/26/32/c/3/D/i.rac  →  26 USC § 32(c)(3)(D)(i)
+statute/26/121/a.rac      →  26 USC § 121(a)
+```
+
+### Mandatory Pre-Encoding Workflow
+
+1. **Parse the target filepath** to understand which subsection you're encoding
+2. **FETCH THE ACTUAL STATUTE TEXT** from law.cornell.edu BEFORE writing anything
+3. **Quote the exact text** of the subsection in your file's `text:` field
+4. **Only encode what that subsection says** - nothing more, nothing less
+
+### Common Errors to Avoid
+
+❌ **Content from wrong subsection** - If you're encoding (c)(3)(D)(i), don't include rules from (ii) or (iii)
+❌ **Formula oversimplification** - If statute says "amount by which X would increase IF Y were increased by the greater of (i) or (ii)", implement exactly that, not just "max(i, ii)"
+❌ **Wrong paragraph numbering** - If the `text:` field quotes "(d)(5)", verify that's actually (d)(5) in the statute, not (d)(9) mislabeled
+
+### One Subsection Per File
+
+Each file encodes EXACTLY one subsection. If a section has three subparagraphs (i), (ii), (iii):
+- Create three files: `D/i.rac`, `D/ii.rac`, `D/iii.rac`
+- NOT one `D.rac` file with all three mixed together
+
 ## Workflow
 
-1. **Fetch statute text** - Use WebSearch/WebFetch to get official text from uscode.house.gov or Cornell LII
-2. **Analyze structure** - Identify definitions, eligibility, formulas, phase-outs, exceptions
-3. **Write DSL** - Create .cosilico files following the patterns below
-4. **Create parameters.yaml** - Extract all dollar amounts, rates, thresholds
-5. **Document** - Add metadata.yaml with coverage and sources
+1. **Fetch statute text** - Use WebFetch to get official text from law.cornell.edu/uscode/text/{title}/{section}
+2. **Verify citation** - Confirm the filepath matches what you're encoding
+3. **Quote exact text** - Add the verbatim subsection text to `text:` field
+4. **Analyze structure** - Identify definitions, eligibility, formulas, phase-outs, exceptions
+5. **Write DSL** - Create .rac files following the patterns below
+6. **Extract parameters** - All dollar amounts and rates become parameters
 
 ## Output Location
 
@@ -32,75 +61,87 @@ statute/26/32/           # EITC
 └── metadata.yaml        # Coverage documentation
 ```
 
-## DSL Pattern
+## RAC Format Pattern
 
-Python-style syntax with colons and indentation (no braces):
+YAML-based with embedded Python formulas:
 
-```
-# 26 USC 32(a)(1) - Earned Income Credit
-imports:
-  earned_income: statute/26/32/c/2/A/earned_income
-  phase_in_rate: statute/26/32/parameters#phase_in_rate
-  max_credit: statute/26/32/parameters#maximum_credit
-  phase_out_start: statute/26/32/parameters#phase_out_start
-  phase_out_rate: statute/26/32/parameters#phase_out_rate
+```yaml
+# 26 USC § 32(a)(1) - Earned Income Credit
 
-entity TaxUnit
-period Year
-dtype Money
-unit "USD"
-label "Earned Income Credit"
-reference "26 USC 32(a)(1)"
+text: """
+(a) Allowance of credit.—
+(1) In general.— In the case of an eligible individual, there shall be allowed
+as a credit against the tax imposed by this subtitle...
+"""
 
-formula:
-  # Phase-in region
-  if earned_income <= phase_in_end:
-    return earned_income * phase_in_rate
+parameter phase_in_rate:
+  description: "Phase-in rate for EITC"
+  unit: rate
+  values:
+    1996-01-01: 0.34
 
-  # Plateau region
-  if earned_income <= phase_out_start:
-    return max_credit
-
-  # Phase-out region
-  return max(0, max_credit - (earned_income - phase_out_start) * phase_out_rate)
+variable earned_income_credit:
+  imports:
+    - 26/32/c/2/A#earned_income
+    - 26/32/b/1#max_credit
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  unit: "USD"
+  label: "Earned Income Credit"
+  description: "Credit amount per 26 USC 32(a)(1)"
+  syntax: python
+  formula: |
+    # Phase-in region
+    if earned_income <= phase_in_end:
+      return earned_income * phase_in_rate
+    # Plateau region
+    if earned_income <= phase_out_start:
+      return max_credit
+    # Phase-out region
+    return max(0, max_credit - (earned_income - phase_out_start) * phase_out_rate)
+  tests:
+    - name: "Low income phase-in"
+      period: 2024-01
+      inputs:
+        earned_income: 10_000
+        num_children: 1
+      expect: 3400
 ```
 
 Key syntax rules:
-- `if condition:` (Python-style, not `if condition then`)
-- Multi-line: `if x:\n  return value`
-- Inline: `if x: value else other`
-- No braces - use indentation
-- `imports:` block with colon, indented items
+- Named declarations: `parameter name:`, `variable name:`, `input name:`
+- Imports use path#variable syntax: `26/32/c/2/A#earned_income`
+- Formula is Python inside YAML `|` block
+- Tests are inline with the variable
+- Use `_` for thousands: `250_000` not `250000`
 
 ## Critical Rules
 
-1. **No magic numbers** - Every dollar amount and rate comes from parameters.yaml
-2. **Citation required** - Every formula must have a `reference` field citing the statute
-3. **One concept per file** - Split complex sections into separate files
-4. **Use imports** - Reference other sections, don't duplicate formulas
+1. **Filepath = Citation** - The file path IS the legal citation (most important!)
+2. **Fetch statute first** - ALWAYS read actual statute text before encoding
+3. **No magic numbers** - Every dollar amount and rate becomes a parameter in the same file
+4. **One subsection per file** - Each .rac file encodes exactly one statutory subsection
+5. **Use imports** - Reference other sections with path#variable syntax
+6. **Allowed literals only** - Only -1, 0, 1, 2, 3 can appear in formulas
 
-## Parameters Pattern
+## Attribute Whitelist
 
-```yaml
-# parameters.yaml
-eitc:
-  phase_in_rate:
-    2024: 0.34
-    2023: 0.34
-    description: "Phase-in rate for one qualifying child"
-    reference: "26 USC 32(b)(1)(A)"
+Only these attributes are valid (per RAC_SPEC.md):
 
-  maximum_credit:
-    2024: 3995
-    2023: 3733
-    description: "Maximum credit for one qualifying child"
-    reference: "26 USC 32(b)(2)(A)"
-    indexed: true
-    index_base_year: 1996
-```
+**Parameters:** `description`, `unit`, `indexed_by`, `values`
+**Variables:** `imports`, `entity`, `period`, `dtype`, `unit`, `label`, `description`, `default`, `formula`, `tests`, `syntax`, `versions`
+**Inputs:** `entity`, `period`, `dtype`, `unit`, `label`, `description`, `default`
+
+Do NOT add:
+- `source:` or `reference:` - Filepath is the citation
+- `indexed:` - Use `indexed_by:` instead
+- Any other arbitrary fields
 
 ## DO NOT
 
-- Write tests (validator agent does this)
+- Write tests separately (put them inline in the variable's `tests:` block)
 - Validate against PolicyEngine (validator agent does this)
-- Guess at values - if unclear, note it in metadata.yaml
+- Guess at values - fetch from authoritative source
+- Simplify formulas beyond what the statute says
+- Mix content from different subsections in one file

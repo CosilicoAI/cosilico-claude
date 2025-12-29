@@ -60,6 +60,7 @@ variable acp_device_subsidy:
 - [ ] No content from other subsections mixed in
 - [ ] If file contains definitions, they match the cited paragraph
 - [ ] If file contains formulas, they implement the cited paragraph's rules
+- [ ] **File granularity** - Each distinct subsection gets its own file (no (h)(1)(B) AND (h)(1)(C) in same file)
 
 **If this check fails, stop and flag as CRITICAL. Other checks are meaningless if content is in wrong location.**
 
@@ -76,6 +77,7 @@ variable acp_device_subsidy:
 - [ ] Parameters have proper time-varying values
 - [ ] Parameter names are statute-neutral (no "pre_tcja_", "aca_", etc.)
 - [ ] Parameters include `reference:` citing source
+- [ ] **Variable names don't embed parameter values** (no "fifteen_rate", "65_threshold", etc.)
 
 ### 3. Schema Correctness (Weight: 15%)
 - [ ] Entity is valid: Person, TaxUnit, Household, Family, etc.
@@ -96,6 +98,7 @@ variable acp_device_subsidy:
 - [ ] Variable names follow snake_case convention
 - [ ] No dead code or unused imports
 - [ ] Description accurately explains the variable
+- [ ] **No redundant aliases** (don't do `x = some_var` then use `x` once - use `some_var` directly)
 
 ## Scoring Guide
 
@@ -143,6 +146,62 @@ variable acp_device_subsidy:
 ```
 
 ## Common Issues to Check
+
+### Variable Names Embedding Parameter Values ⚠️ NEW
+```yaml
+# BAD - embeds rate "15%" in name
+variable capital_gains_fifteen_rate_amount:
+  description: "Amount taxed at 15%"
+
+# BAD - embeds threshold value in name
+variable income_above_65_threshold:
+  formula: ...
+
+# GOOD - generic name that works regardless of parameter value
+variable capital_gains_middle_bracket_amount:
+  description: "Amount taxed at middle bracket rate per 1(h)(1)(C)"
+
+# GOOD - uses parameter name, not value
+variable income_above_elderly_threshold:
+  formula: return income - elderly_age_threshold
+```
+
+Variable names should NEVER contain:
+- Specific rates: "fifteen", "twenty", "7.5", "0.15"
+- Specific amounts: "2000", "10000", "100"
+- Age thresholds: "65", "55", "18"
+- Years: "2018", "pre_tcja", "post_2017"
+
+### File Granularity - One Subsection Per File ⚠️ NEW
+```
+# BAD - statute/26/1/h.rac containing variables for (h)(1)(B), (h)(1)(C), (h)(1)(D)
+# Each subsection should be in its own file
+
+# GOOD - Split into proper files:
+statute/26/1/h/1/B.rac  →  0% rate calculation (Section 1(h)(1)(B))
+statute/26/1/h/1/C.rac  →  15% rate calculation (Section 1(h)(1)(C))
+statute/26/1/h/1/D.rac  →  20% rate calculation (Section 1(h)(1)(D))
+```
+
+If a .rac file contains variables that reference DIFFERENT subsections in their descriptions:
+- "per Section 1(h)(1)(B)" AND "per Section 1(h)(1)(C)" in same file = WRONG
+- Each should be in its own file matching the citation
+
+### Redundant Variable Aliases ⚠️ NEW
+```python
+# BAD - pointless aliases
+regular_tax = income_tax_before_credits
+cap_gains_tax = capital_gains_tax
+amt = alternative_minimum_tax
+return regular_tax + cap_gains_tax + amt
+
+# GOOD - use variables directly
+return income_tax_before_credits + capital_gains_tax + alternative_minimum_tax
+
+# EXCEPTION - aliases are OK when they add meaning or are used multiple times
+se_tax = sum(Person.self_employment_tax)  # OK - aggregation
+return income_tax + se_tax + se_tax * surtax_rate  # OK - used twice
+```
 
 ### Hardcoded Literals
 ```python

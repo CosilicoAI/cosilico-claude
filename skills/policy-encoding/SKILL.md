@@ -52,31 +52,78 @@ results = runner.run()  # Runs on ~100k+ households
 - Compares against PolicyEngine AND TAXSIM
 - Reports match rates with statistical significance
 
+## ⚠️ CRITICAL: Filepath = Citation
+
+**The filepath IS the legal citation.** This is the most important encoding rule.
+
+```
+statute/26/32/c/3/D/i.rac  →  26 USC § 32(c)(3)(D)(i)
+statute/26/121/a.rac      →  26 USC § 121(a)
+statute/26/1411/a.rac     →  26 USC § 1411(a)
+```
+
+### Pre-Encoding Workflow (MANDATORY)
+
+1. **Parse the target filepath** to understand which subsection you're encoding
+2. **FETCH THE ACTUAL STATUTE TEXT** from law.cornell.edu BEFORE writing anything
+3. **Verify the text matches** the subsection you're claiming to encode
+4. **Only encode what that subsection says** - nothing more, nothing less
+
+### Common Errors That Cause Misalignment
+
+❌ **Content from wrong subsection** - If encoding (c)(3)(D)(i), don't include rules from (ii) or (iii)
+❌ **Formula oversimplification** - Implement exactly what the statute says, no shortcuts
+❌ **Wrong paragraph numbering** - Verify (d)(5) is actually (d)(5), not (d)(9) mislabeled
+
+### One Subsection Per File
+
+Each file encodes EXACTLY one statutory subsection:
+- ✅ Create `D/i.rac`, `D/ii.rac`, `D/iii.rac` for three subparagraphs
+- ❌ NOT one `D.rac` file with all three mixed together
+
 ## Encoding Workflow
 
-### Step 1: Create .cosilico File in cosilico-us
+### Step 1: Create .rac File in cosilico-us
 
-```bash
-# Create directory structure matching statute
-mkdir -p ~/CosilicoAI/cosilico-us/statute/26/1411/
+```yaml
+# statute/26/1411/a.rac
+# 26 USC § 1411(a) - General Rule
 
-# Create the encoding file
-cat > ~/CosilicoAI/cosilico-us/statute/26/1411/net_investment_income_tax.cosilico << 'EOF'
-# Net Investment Income Tax
-# Citation: 26 USC § 1411
+text: """
+(a) General rule.— Except as provided in this section, there is hereby imposed...
+a tax equal to 3.8 percent of the lesser of—
+(1) net investment income, or
+(2) modified adjusted gross income in excess of the threshold amount.
+"""
 
-@entity: TaxUnit
-@period: Year
-@dtype: Money
+parameter niit_rate:
+  description: "Tax rate on net investment income"
+  unit: rate
+  values:
+    2013-01-01: 0.038
 
-net_investment_income_tax = (
-    # 3.8% of lesser of NII or excess MAGI
-    0.038 * min(
-        net_investment_income,
-        max(0, modified_adjusted_gross_income - niit_threshold)
-    )
-)
-EOF
+variable net_investment_income_tax:
+  imports:
+    - 26/1411/c#net_investment_income
+    - 26/1411/b#threshold_amount
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  unit: "USD"
+  label: "Net Investment Income Tax"
+  description: "3.8% tax on lesser of NII or excess MAGI per 26 USC 1411(a)"
+  syntax: python
+  formula: |
+    excess_magi = max(0, modified_adjusted_gross_income - threshold_amount)
+    return niit_rate * min(net_investment_income, excess_magi)
+  tests:
+    - name: "MAGI below threshold"
+      period: 2024-01
+      inputs:
+        net_investment_income: 50_000
+        modified_adjusted_gross_income: 180_000
+        threshold_amount: 200_000
+      expect: 0
 ```
 
 ### Step 2: Add to CPSValidationRunner
