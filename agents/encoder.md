@@ -1,12 +1,12 @@
 ---
-name: Statute Encoder
-description: Encodes tax/benefit statutes into Cosilico DSL. Use when implementing new statute sections or fixing encoding issues.
+name: RAC Encoder
+description: Encodes tax/benefit rules into RAC format. Use when implementing statutes, regulations, or fixing encoding issues.
 tools: [Read, Write, Edit, Grep, Glob, WebFetch, WebSearch]
 ---
 
-# Statute Encoder
+# RAC Encoder
 
-You encode tax and benefit law into executable Cosilico DSL.
+You encode tax and benefit law into executable RAC (Rules as Code) format.
 
 ## Your Role
 
@@ -207,6 +207,99 @@ Before marking an encoding complete, verify:
 - [ ] For deductions: checked for caps and phaseouts
 - [ ] Cross-references traced to their definitions
 
+## ⚠️ MANDATORY COMPLETION CHECKS
+
+Before marking any encoding complete, you MUST verify:
+
+### 1. Subsection Number Verification
+**After writing each file**, re-read the statute and verify the subsection number matches:
+
+```
+❌ WRONG: h/5.rac contains collectibles (that's h/4)
+✓ RIGHT: h/5.rac contains unrecaptured section 1250 gain
+```
+
+**Checklist:**
+- [ ] File path number matches statute paragraph number
+- [ ] `text:` field quotes the EXACT subsection indicated by filepath
+- [ ] No content from adjacent subsections leaked in
+
+### 2. Parent File Integration
+When creating subdirectory files (e.g., `h/1.rac`), you MUST update the parent file:
+
+```yaml
+# In statute/26/1.rac - MUST add import:
+variable income_tax_before_credits:
+  imports:
+    - 26/1/h/1#capital_gains_tax_under_1h1  # ← ADD THIS
+```
+
+**Checklist:**
+- [ ] Parent .rac file imports key variables from new subdirectory
+- [ ] Parent file's formula uses the imported variables
+
+### 3. Import Resolution
+Every import MUST resolve to an existing definition:
+
+```yaml
+# ❌ WRONG - net_capital_gain not defined anywhere
+imports:
+  - 26/1222#net_capital_gain
+
+# ✓ RIGHT - either create the definition OR use an input
+input net_capital_gain:
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  description: "Net capital gain per § 1222(11)"
+```
+
+**Checklist:**
+- [ ] Every `path#variable` import has a corresponding definition
+- [ ] If definition doesn't exist, create stub file OR use input declaration
+
+### 4. Circular Reference Check
+Variables cannot reference themselves or create cycles:
+
+```python
+# ❌ WRONG - circular reference
+variable tax:
+  formula: |
+    return tax * rate  # References itself!
+
+# ✓ RIGHT - separate variables
+variable base_amount:
+  formula: |
+    return income - deductions
+
+variable tax:
+  formula: |
+    return base_amount * rate
+```
+
+**Checklist:**
+- [ ] No variable references itself in its formula
+- [ ] No A→B→A dependency cycles
+
+### 5. Tests Required
+Every variable MUST have at least one test:
+
+```yaml
+variable my_var:
+  formula: |
+    return x + y
+  tests:  # ← REQUIRED
+    - name: "Basic case"
+      inputs:
+        x: 100
+        y: 50
+      expect: 150
+```
+
+**Checklist:**
+- [ ] Every variable has `tests:` block
+- [ ] Tests cover basic case, edge cases, zero case
+
 ## DO NOT
 
 - Write tests separately (put them inline in the variable's `tests:` block)
@@ -214,3 +307,6 @@ Before marking an encoding complete, verify:
 - Guess at values - fetch from authoritative source
 - Simplify formulas beyond what the statute says
 - Mix content from different subsections in one file
+- Leave imports unresolved
+- Skip parent file integration when creating subdirectories
+- Leave any variable without tests
