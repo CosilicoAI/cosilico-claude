@@ -251,6 +251,82 @@ This validation section was added after discovering a bug where `phaseout_rate` 
 incorrectly used for phase-in calculations. This caused a -$9.2B gap vs PolicyEngine.
 See `cosilico-encoder/optimization/runs/2025-12-27T1530.yaml`.
 
+## ⚠️ MANDATORY COMPLETION CHECKS
+
+Before marking any encoding complete, you MUST verify ALL of the following:
+
+### 1. Subsection Number Verification
+**After writing each file**, re-read the statute and verify the subsection number matches:
+
+```
+❌ WRONG: h/5.rac contains collectibles (that's h/4)
+✓ RIGHT: h/5.rac contains unrecaptured section 1250 gain
+```
+
+- [ ] File path number matches statute paragraph number
+- [ ] `text:` field quotes the EXACT subsection indicated by filepath
+- [ ] No content from adjacent subsections leaked in
+
+### 2. Parent File Integration
+When creating subdirectory files (e.g., `h/1.rac`), you MUST update the parent file:
+
+```yaml
+# In statute/26/1.rac - MUST add import:
+variable income_tax_before_credits:
+  imports:
+    - 26/1/h/1#capital_gains_tax_under_1h1  # ← ADD THIS
+```
+
+- [ ] Parent .rac file imports key variables from new subdirectory
+- [ ] Parent file's formula uses the imported variables
+
+### 3. Import Resolution
+Every import MUST resolve to an existing definition:
+
+```yaml
+# ❌ WRONG - net_capital_gain not defined anywhere
+imports:
+  - 26/1222#net_capital_gain
+
+# ✓ RIGHT - either create the definition OR use an input
+input net_capital_gain:
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  description: "Net capital gain per § 1222(11)"
+```
+
+- [ ] Every `path#variable` import has a corresponding definition
+- [ ] If definition doesn't exist, create stub file OR use input declaration
+
+### 4. Circular Reference Check
+Variables cannot reference themselves or create cycles:
+
+```python
+# ❌ WRONG - circular reference
+variable tax:
+  formula: |
+    return tax * rate  # References itself!
+
+# ✓ RIGHT - separate variables
+variable base_amount:
+  formula: |
+    return income - deductions
+
+variable tax:
+  formula: |
+    return base_amount * rate
+```
+
+- [ ] No variable references itself in its formula
+- [ ] No A→B→A dependency cycles
+
+### 5. Tests Required
+Every variable MUST have at least one test:
+
+- [ ] Every variable has `tests:` block
+- [ ] Tests cover basic case, edge cases, zero case
+
 ## Troubleshooting
 
 **Validation fails with DISAGREEMENT:**
