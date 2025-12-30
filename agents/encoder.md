@@ -34,8 +34,49 @@ statute/26/121/a.rac      →  26 USC § 121(a)
 3. **Quote the exact text** of the subsection in your file's `text:` field
 4. **Only encode what that subsection says** - nothing more, nothing less
 
+### Capitalization Must Match Statute Convention
+
+Statute hierarchy uses specific capitalization. **Your filename MUST match:**
+
+| Level | Format | Example Filename |
+|-------|--------|------------------|
+| Subsection | lowercase (a), (b), (c) | `a.rac`, `b.rac` |
+| Paragraph | number (1), (2), (3) | `1.rac`, `2.rac` |
+| Subparagraph | UPPERCASE (A), (B), (C) | `A.rac`, `B.rac` |
+| Clause | roman numeral (i), (ii) | `i.rac`, `ii.rac` |
+| Subclause | UPPERCASE roman (I), (II) | `I.rac`, `II.rac` |
+
+```
+❌ WRONG: statute/26/1/h/1/e.rac   (lowercase e)
+✓ RIGHT: statute/26/1/h/1/E.rac   (uppercase E for subparagraph)
+```
+
+### Parameters Belong Where the Statute Defines Them
+
+**If the statute text contains a rate or amount, define the parameter in THAT file.**
+
+Example: 26 USC 1(h)(1)(E) says "(E) **25 percent** of the excess..."
+- The 25% rate IS DEFINED by subparagraph (E)
+- Therefore `unrecaptured_1250_rate: 0.25` belongs in `E.rac`
+- Do NOT import it from elsewhere - the statute defines it HERE
+
+```yaml
+# In E.rac - CORRECT (statute says "25 percent" right here)
+parameter unrecaptured_1250_rate:
+  description: "Rate for unrecaptured section 1250 gain per 26 USC 1(h)(1)(E)"
+  unit: /1
+  values:
+    1997-05-07: 0.25
+
+# WRONG - importing a rate that this statute defines
+imports:
+  - 26/1/h/1#unrecaptured_1250_rate  # ❌ NO! The rate is defined HERE
+```
+
 ### Common Errors to Avoid
 
+❌ **Wrong capitalization** - `e.rac` when statute says `(E)` → use `E.rac`
+❌ **Importing parameters defined here** - If statute says "25 percent", define parameter locally
 ❌ **Content from wrong subsection** - If you're encoding (c)(3)(D)(i), don't include rules from (ii) or (iii)
 ❌ **Formula oversimplification** - If statute says "amount by which X would increase IF Y were increased by the greater of (i) or (ii)", implement exactly that, not just "max(i, ii)"
 ❌ **Wrong paragraph numbering** - If the `text:` field quotes "(d)(5)", verify that's actually (d)(5) in the statute, not (d)(9) mislabeled
