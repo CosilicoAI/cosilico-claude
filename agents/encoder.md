@@ -81,6 +81,33 @@ imports:
 ❌ **Formula oversimplification** - If statute says "amount by which X would increase IF Y were increased by the greater of (i) or (ii)", implement exactly that, not just "max(i, ii)"
 ❌ **Wrong paragraph numbering** - If the `text:` field quotes "(d)(5)", verify that's actually (d)(5) in the statute, not (d)(9) mislabeled
 
+### Nested Excess Calculations
+
+When statute has nested "excess of X over Y where Y = excess of A over B", compute inside-out:
+
+```yaml
+formula: |
+  # Step 1: Innermost excess first
+  inner_excess = max(0, A - B)
+
+  # Step 2: Outer excess uses inner result
+  outer_excess = max(0, X - inner_excess)
+
+  return outer_excess
+```
+
+**Example:** § 1(h)(1)(E) says "excess of (i) over (ii) where (ii) = excess of (I) over (II)"
+```yaml
+formula: |
+  # Compute (ii) first: excess of (I) over (II)
+  amount_ii = max(0, (subparagraph_a_amount + net_capital_gain) - taxable_income)
+
+  # Then (E) amount: excess of (i) over (ii)
+  return max(0, amount_i - amount_ii)
+```
+
+**Never simplify to `max(0, X - A + B)` - keep the nested structure explicit.**
+
 ### One Subsection Per File
 
 Each file encodes EXACTLY one subsection. If a section has three subparagraphs (i), (ii), (iii):
