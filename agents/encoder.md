@@ -57,15 +57,23 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
 
 ## Output Location
 
-All files go in `cosilico-us/statute/{title}/{section}/`:
+All files go in `cosilico-us/statute/{title}/{section}/` with **citation-based filenames only**:
 
 ```
-statute/26/32/           # EITC
-├── a/1/credit.cosilico  # Main credit formula
-├── b/2/phaseout.cosilico
-├── parameters.yaml      # All numeric values
-└── metadata.yaml        # Coverage documentation
+statute/26/32/           # EITC § 32
+├── a.rac                # § 32(a) - Allowance of credit
+├── b/                   # § 32(b) - Percentages and amounts
+│   ├── 1.rac           # § 32(b)(1) - Percentages
+│   └── 2.rac           # § 32(b)(2) - Amounts
+├── c/                   # § 32(c) - Definitions
+│   └── 1.rac           # § 32(c)(1) - Eligible individual
+└── d.rac                # § 32(d) - MFS special rule
 ```
+
+**NEVER create:**
+- `parameters.rac` or `parameters.yaml` - parameters go INLINE in each .rac file
+- Descriptive names like `credit.rac` or `phaseout.rac`
+- Any file that doesn't correspond to a statute subsection
 
 ## RAC Format Pattern
 
