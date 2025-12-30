@@ -96,7 +96,6 @@ variable earned_income_credit:
   unit: "USD"
   label: "Earned Income Credit"
   description: "Credit amount per 26 USC 32(a)(1)"
-  syntax: python
   formula: |
     # Phase-in region
     if earned_income <= phase_in_end:
@@ -118,9 +117,32 @@ variable earned_income_credit:
 Key syntax rules:
 - Named declarations: `parameter name:`, `variable name:`, `input name:`
 - Imports use path#variable syntax: `26/32/c/2/A#earned_income`
-- Formula is Python inside YAML `|` block
+- Formula is Python-like inside YAML `|` block
 - Tests are inline with the variable
 - Use `_` for thousands: `250_000` not `250000`
+
+## ⚠️ DO NOT USE `syntax: python`
+
+The native DSL supports Python-like syntax including:
+- Assignments: `amount = min(x, y)`
+- Return statements: `return max(0, result)`
+- Comments: `# This is a comment`
+- Conditional expressions: `if x > 0: return x`
+
+**NEVER add `syntax: python` to variables.** It breaks the test runner and isn't needed.
+
+```yaml
+# CORRECT - native DSL
+formula: |
+  amount_i = min(x, y)
+  amount_ii = max(0, a + b - c)
+  return max(0, amount_i - amount_ii)
+
+# WRONG - do not use syntax: python
+syntax: python  # ❌ NEVER ADD THIS
+formula: |
+  ...
+```
 
 ## Critical Rules
 
@@ -136,10 +158,11 @@ Key syntax rules:
 Only these attributes are valid (per RAC_SPEC.md):
 
 **Parameters:** `description`, `unit`, `indexed_by`, `values`
-**Variables:** `imports`, `entity`, `period`, `dtype`, `unit`, `label`, `description`, `default`, `formula`, `tests`, `syntax`, `versions`
+**Variables:** `imports`, `entity`, `period`, `dtype`, `unit`, `label`, `description`, `default`, `formula`, `tests`, `versions`
 **Inputs:** `entity`, `period`, `dtype`, `unit`, `label`, `description`, `default`
 
 Do NOT add:
+- `syntax: python` - Native DSL is sufficient, and `syntax: python` breaks test runner
 - `source:` or `reference:` - Filepath is the citation
 - `indexed:` - Use `indexed_by:` instead
 - Any other arbitrary fields
