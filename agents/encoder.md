@@ -138,6 +138,70 @@ Do NOT add:
 - `indexed:` - Use `indexed_by:` instead
 - Any other arbitrary fields
 
+## ⚠️ COMPLETENESS PATTERNS (Common Encoding Mistakes)
+
+### 1. Section Completeness Check
+Before encoding any section, ENUMERATE ALL SUBSECTIONS and note their effects:
+
+```bash
+# For 26 USC § 1, check ALL subsections from law.cornell.edu
+# Returns: (a), (b), (c), (d), (e), (f), (g), (h), (i), (j)
+```
+
+**Example of missed subsection that caused 18% error:**
+- § 1(a)-(d): Tax rate tables for different filing statuses ✓ encoded
+- § 1(h): **Maximum capital gains rate** ✗ MISSED - provides 0%/15%/20% preferential rates
+
+The encoder only did the ordinary rate tables, missing that § 1(h) MODIFIES the calculation for capital gains income.
+
+**Rule**: For any section, create a checklist of ALL subsections and verify each is either:
+- Encoded in a file
+- Explicitly noted as "not applicable" (e.g., sunset clause)
+- Delegated elsewhere
+
+### 2. Credit/Deduction Three-Part Pattern
+Every credit or deduction has THREE components. Check for ALL:
+
+| Component | What to look for | Example (EITC § 32) |
+|-----------|------------------|---------------------|
+| **Eligibility** | "eligible individual", "qualifying", requirements | § 32(c)(1) - age 25-64 for childless |
+| **Calculation** | The formula, rates, amounts | § 32(a) - credit percentage × earned income |
+| **Limits** | Phaseout, caps, disqualifications | § 32(d) - MFS ineligible, § 32(i) - investment income limit |
+
+**Example of missed eligibility that caused 9% false positives:**
+- EITC calculation formula ✓ encoded
+- EITC eligibility rules ✗ MISSED:
+  - § 32(c)(1)(A)(ii): Must be age 25-64 if no qualifying children
+  - § 32(d): MFS generally cannot claim
+  - § 32(i): Investment income > $11,600 disqualifies
+
+### 3. Cross-Reference Modification Pattern
+Watch for subsections that MODIFY the main rule:
+
+```
+§ 1(a)-(d): "There is hereby imposed on the taxable income... a tax determined in accordance with the following table"
+
+§ 1(h): "If a taxpayer has a net capital gain... the tax imposed by this section shall not exceed..."
+        ↑ This MODIFIES (a)-(d), not a separate calculation
+```
+
+**Red flag phrases** indicating modification:
+- "shall not exceed"
+- "in lieu of"
+- "notwithstanding subsection (X)"
+- "reduced by"
+- "except as provided in"
+
+### 4. Quick Completeness Checklist
+
+Before marking an encoding complete, verify:
+- [ ] Listed ALL subsections of the section
+- [ ] Checked for subsections that MODIFY the main rule
+- [ ] For credits: encoded eligibility, calculation, AND limits
+- [ ] For income: checked for preferential rate provisions
+- [ ] For deductions: checked for caps and phaseouts
+- [ ] Cross-references traced to their definitions
+
 ## DO NOT
 
 - Write tests separately (put them inline in the variable's `tests:` block)

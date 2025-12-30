@@ -105,9 +105,68 @@ Every encoding needs tests for:
 6. **Filing status variants** - Single, MFJ, HOH, MFS
 7. **Edge cases** - Documented exceptions
 
+## ⚠️ COMPLETENESS VALIDATION (Critical Checks)
+
+### 1. Section Completeness Audit
+Before validating, enumerate ALL subsections of the encoded statute from law.cornell.edu.
+
+**Check**: Is each subsection either encoded OR explicitly documented as "not applicable"?
+
+**Example failure**: § 1 encoding only covered (a)-(d) rate tables, missing § 1(h) which provides preferential capital gains rates. This caused 18% validation error.
+
+### 2. Credit/Deduction Three-Part Audit
+Every credit or deduction MUST have tests covering:
+
+| Component | What to test | Red flag if missing |
+|-----------|-------------|---------------------|
+| **Eligibility** | Age limits, filing status restrictions, income limits | False positives (credit given to ineligible filers) |
+| **Calculation** | Phase-in, plateau, phase-out | Incorrect dollar amounts |
+| **Limits/Disqualifications** | Caps, cliffs, hard cutoffs | Over-crediting at edges |
+
+**Example failure**: EITC encoding tested calculation but missed:
+- § 32(c)(1)(A)(ii): Age 25-64 for childless → 2,353 false positives
+- § 32(d): MFS ineligible → credits given to MFS filers
+- § 32(i): Investment income > $11,600 disqualifies
+
+### 3. Aggregate Comparison (Not Just Match Rate)
+Individual match rates can hide systematic errors. ALWAYS compute:
+
+```python
+# After running validation
+cosilico_total = df['cosilico_result'].sum()
+reference_total = df['reference_result'].sum()
+percent_diff = (cosilico_total - reference_total) / reference_total * 100
+
+# Red flags:
+# - Total differs by > 1% even with high match rate
+# - Systematic over/under crediting
+```
+
+**Example**: 91% match rate looked acceptable, but aggregate showed $2.3B overcredit due to missing eligibility rules.
+
+### 4. Cross-Reference Modification Check
+When a subsection uses phrases like:
+- "shall not exceed"
+- "in lieu of"
+- "notwithstanding subsection (X)"
+
+It's MODIFYING another subsection's calculation. Verify:
+1. The modification is encoded
+2. Tests cover scenarios where the modification applies
+
+### 5. Quick Validation Checklist
+Before marking validation complete:
+- [ ] Listed ALL subsections of the statute
+- [ ] Verified each is covered or documented as N/A
+- [ ] For credits: tested eligibility, calculation, AND limits
+- [ ] Computed aggregate totals (not just match rate)
+- [ ] Checked for cross-reference modifications
+- [ ] Tested edge cases at every threshold boundary
+
 ## DO NOT
 
 - Write or modify .cosilico files (encoder agent does this)
 - Assume the encoding is correct - verify independently
 - Skip edge cases to make tests pass
 - Hide discrepancies - report them clearly
+- Report only match rate without aggregate comparison
