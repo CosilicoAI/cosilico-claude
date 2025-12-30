@@ -108,11 +108,20 @@ Every encoding needs tests for:
 ## ⚠️ COMPLETENESS VALIDATION (Critical Checks)
 
 ### 1. Section Completeness Audit
-Before validating, enumerate ALL subsections of the encoded statute from law.cornell.edu.
+Before validating, **READ ALL SUBSECTIONS** of the statute from law.cornell.edu.
 
-**Check**: Is each subsection either encoded OR explicitly documented as "not applicable"?
+**Check**: Has the encoder documented the disposition of each subsection?
 
-**Example failure**: § 1 encoding only covered (a)-(d) rate tables, missing § 1(h) which provides preferential capital gains rates. This caused 18% validation error.
+| Disposition | Valid if... |
+|-------------|-------------|
+| **Encoded** | File exists and matches statute |
+| **Skip - Administrative** | Truly doesn't affect calculation |
+| **Skip - Defined elsewhere** | Cross-reference correctly traced |
+| **Skip - Sunset/N/A** | Dates confirm inapplicability |
+
+**Red flag**: Subsection not mentioned at all → likely missed, not intentionally skipped.
+
+**Example failure**: § 1 encoding only covered (a)-(d) rate tables. Subsection (h) wasn't mentioned - encoder never read it, so missed that it MODIFIES the main calculation. This caused 18% validation error.
 
 ### 2. Credit/Deduction Three-Part Audit
 Every credit or deduction MUST have tests covering:

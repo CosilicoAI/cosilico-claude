@@ -141,23 +141,28 @@ Do NOT add:
 ## ⚠️ COMPLETENESS PATTERNS (Common Encoding Mistakes)
 
 ### 1. Section Completeness Check
-Before encoding any section, ENUMERATE ALL SUBSECTIONS and note their effects:
+Before encoding any section, **READ ALL SUBSECTIONS** to understand the full picture:
 
 ```bash
-# For 26 USC § 1, check ALL subsections from law.cornell.edu
+# For 26 USC § 1, fetch and read ALL subsections from law.cornell.edu
 # Returns: (a), (b), (c), (d), (e), (f), (g), (h), (i), (j)
 ```
 
+**Then document the disposition of each** in a comment or metadata:
+
+| Disposition | When to use | Example |
+|-------------|-------------|---------|
+| **Encode** | Affects calculation | § 1(h) - preferential cap gains rates |
+| **Skip - Administrative** | "Secretary shall prescribe" | § 1(f)(7) - rounding rules |
+| **Skip - Sunset** | Expired or not yet effective | Pre-TCJA rates |
+| **Skip - Defined elsewhere** | Cross-reference to another section | "as defined in section 62" |
+| **Skip - State delegation** | "States shall determine" | Many welfare provisions |
+
 **Example of missed subsection that caused 18% error:**
-- § 1(a)-(d): Tax rate tables for different filing statuses ✓ encoded
-- § 1(h): **Maximum capital gains rate** ✗ MISSED - provides 0%/15%/20% preferential rates
+- § 1(a)-(d): Tax rate tables ✓ encoded
+- § 1(h): **Maximum capital gains rate** ✗ MISSED - wasn't read, so encoder didn't realize it MODIFIES (a)-(d)
 
-The encoder only did the ordinary rate tables, missing that § 1(h) MODIFIES the calculation for capital gains income.
-
-**Rule**: For any section, create a checklist of ALL subsections and verify each is either:
-- Encoded in a file
-- Explicitly noted as "not applicable" (e.g., sunset clause)
-- Delegated elsewhere
+**Rule**: READ all subsections, then document why each is encoded or skipped.
 
 ### 2. Credit/Deduction Three-Part Pattern
 Every credit or deduction has THREE components. Check for ALL:
