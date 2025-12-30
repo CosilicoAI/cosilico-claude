@@ -65,7 +65,7 @@ statute/26/1411/a.rac     →  26 USC § 1411(a)
 ### Pre-Encoding Workflow (MANDATORY)
 
 1. **Parse the target filepath** to understand which subsection you're encoding
-2. **FETCH THE ACTUAL STATUTE TEXT** from law.cornell.edu BEFORE writing anything
+2. **FETCH THE ACTUAL STATUTE TEXT** from Supabase (`arch sb usc/{title}/{section}`) or Cornell LII BEFORE writing anything
 3. **Verify the text matches** the subsection you're claiming to encode
 4. **Only encode what that subsection says** - nothing more, nothing less
 

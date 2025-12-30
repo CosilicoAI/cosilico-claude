@@ -28,7 +28,14 @@ statute/26/32/c/2/A.rac  →  26 USC § 32(c)(2)(A)
 ```
 
 **ALWAYS fetch the actual statute text** to verify:
-- Use law.cornell.edu: `https://www.law.cornell.edu/uscode/text/{title}/{section}`
+- **Supabase (preferred)**: Query the `rules` table with 1.2M+ parsed statutes:
+  ```bash
+  arch sb usc/{title}/{section}   # CLI command
+  # Or direct API query:
+  curl -s "https://nsupqhfchdtqclomlrgs.supabase.co/rest/v1/rules?source_path=eq.usc/{title}/{section}" \
+    -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+- **Fallback**: WebFetch from `law.cornell.edu/uscode/text/{title}/{section}`
 - Read the specific subsection indicated by the filepath
 - Verify the file content encodes ONLY what that subsection says
 - If content belongs elsewhere (e.g., device benefits in (b)(5) not (a)(8)), flag as CRITICAL error
@@ -55,7 +62,7 @@ variable acp_device_subsidy:
 ## Review Checklist
 
 ### 0. Filepath-Content Match (Weight: 35%) ⚠️ BLOCKING
-- [ ] **Fetch the actual statute** from law.cornell.edu
+- [ ] **Fetch the actual statute** from Supabase (preferred) or Cornell LII
 - [ ] Content encodes ONLY what the filepath citation says
 - [ ] No content from other subsections mixed in
 - [ ] If file contains definitions, they match the cited paragraph
@@ -319,8 +326,55 @@ variable b:
 2. **FETCH THE ACTUAL STATUTE TEXT** from law.cornell.edu - this is MANDATORY
 3. Read the .rac file being reviewed
 4. **FIRST: Verify content matches the filepath citation** (blocking check)
-5. Read related files (imports, parent statutes)
-6. Check remaining criteria systematically
-7. Assign scores with specific justifications
-8. List issues by severity (filepath mismatch is always CRITICAL)
-9. Provide actionable recommendations including correct file placement if needed
+5. **SCAN FOR NUMERIC LITERALS** in all formulas (see below)
+6. Read related files (imports, parent statutes)
+7. Check remaining criteria systematically
+8. Assign scores with specific justifications
+9. List issues by severity (filepath mismatch is always CRITICAL)
+10. Provide actionable recommendations including correct file placement if needed
+
+## ⚠️ MANDATORY: Numeric Literal Scan
+
+**Before completing any review, you MUST scan formulas for disallowed numeric literals.**
+
+### Allowed Literals (ONLY these)
+```
+-1, 0, 1, 2, 3
+```
+
+### Detection Method
+
+Use grep to find potential violations in `formula:` blocks:
+```bash
+# Look for numbers 4-9 or multi-digit numbers in formula lines
+grep -E 'formula:|^\s+[^#]*\b([4-9]|[1-9][0-9]+)\b' file.rac
+```
+
+Then verify each match is actually in a formula (not a comment or test).
+
+### Common Violations to Flag
+
+| Pattern | Example | Issue |
+|---------|---------|-------|
+| Monetary amounts | `return 100`, `if amount > 4` | Should be parameter |
+| Percentages | `* 0.15`, `/ 12`, `* 0.80` | Should be parameter |
+| Thresholds | `>= 65`, `< 18`, `== 400` | Should be parameter |
+| Counts | `* 12` (months), `/ 52` (weeks) | Should be parameter |
+
+### Exceptions (Do NOT flag)
+- Numbers in comments: `# 80% limit per TCJA`
+- Numbers in test cases: `expect: 4200`
+- Test inputs: `inputs: {income: 50000}`
+- Line numbers or indices used for iteration: `range(3)`
+
+### Example Scan Output
+
+```markdown
+**Literal Scan Results:**
+- Line 47: `if copay > 4:` - ⚠️ VIOLATION: literal `4` should be `max_nominal_copay` parameter
+- Line 89: `return amount * 0.80` - ⚠️ VIOLATION: literal `0.80` should be `limitation_rate` parameter
+- Line 112: `for i in range(3):` - ✅ OK: loop index
+- Line 125: `expect: 4200` - ✅ OK: test expected value
+```
+
+If ANY violations found, this MUST reduce the Parameterization score significantly (typically -3 to -5 points).

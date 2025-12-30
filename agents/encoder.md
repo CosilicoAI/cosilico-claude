@@ -24,7 +24,13 @@ statute/26/121/a.rac      →  26 USC § 121(a)
 ### Mandatory Pre-Encoding Workflow
 
 1. **Parse the target filepath** to understand which subsection you're encoding
-2. **FETCH THE ACTUAL STATUTE TEXT** from law.cornell.edu BEFORE writing anything
+2. **FETCH THE ACTUAL STATUTE TEXT** from Supabase (preferred) or Cornell LII
+   - **Supabase query** (1.2M+ rules): `arch sb usc/{title}/{section}` or query directly:
+     ```
+     curl -s "https://nsupqhfchdtqclomlrgs.supabase.co/rest/v1/rules?source_path=eq.usc/{title}/{section}&select=heading,body" \
+       -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdXBxaGZjaGR0cWNsb21scmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzExMDgsImV4cCI6MjA4MjUwNzEwOH0.BPdUadtBCdKfWZrKbfxpBQUqSGZ4hd34Dlor8kMBrVI"
+     ```
+   - **Fallback**: WebFetch from law.cornell.edu/uscode/text/{title}/{section}
 3. **Quote the exact text** of the subsection in your file's `text:` field
 4. **Only encode what that subsection says** - nothing more, nothing less
 
@@ -42,7 +48,7 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
 
 ## Workflow
 
-1. **Fetch statute text** - Use WebFetch to get official text from law.cornell.edu/uscode/text/{title}/{section}
+1. **Fetch statute text** - Query Supabase (`arch sb`) or use WebFetch for Cornell LII fallback
 2. **Verify citation** - Confirm the filepath matches what you're encoding
 3. **Quote exact text** - Add the verbatim subsection text to `text:` field
 4. **Analyze structure** - Identify definitions, eligibility, formulas, phase-outs, exceptions
