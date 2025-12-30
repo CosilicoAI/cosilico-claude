@@ -83,8 +83,14 @@ variable acp_device_subsidy:
 - [ ] Entity is valid: Person, TaxUnit, Household, Family, etc.
 - [ ] Period is valid: Year, Month, Week, Day
 - [ ] Dtype is valid: Money, Rate, Boolean, Integer, Count, String
-- [ ] Imports resolve to existing files/variables
+- [ ] **Imports resolve** - Every `path#variable` import has corresponding definition
 - [ ] No duplicate variable declarations
+- [ ] **No circular references** - Variables don't reference themselves or create A→B→A cycles
+
+### 3b. Integration Checks (Weight: 5%) ⚠️ NEW
+- [ ] **Parent file imports subdirectory** - If reviewing h/1.rac, check that 1.rac imports from h/
+- [ ] **No orphaned files** - Subdirectory files should be imported somewhere
+- [ ] **Import chain complete** - Follow imports and verify each target file exists
 
 ### 4. Test Coverage (Weight: 20%)
 - [ ] Has inline `tests:` block
@@ -263,6 +269,48 @@ tests:
   - name: "Ineligible - MFS spouse itemizes"
     inputs: {filing_status: MFS, is_ineligible: true}
     expect: 0
+```
+
+### Orphaned Subdirectory Files ⚠️ NEW
+```
+# BAD - h/1.rac exists but parent 1.rac doesn't import it
+statute/26/1.rac         # No imports from h/
+statute/26/1/h/1.rac     # ORPHANED - never used!
+
+# GOOD - parent imports from subdirectory
+statute/26/1.rac:
+  variable income_tax_before_credits:
+    imports:
+      - 26/1/h/1#capital_gains_tax_under_1h1  # ✓ Imports h/1.rac
+```
+
+When reviewing subdirectory files like `h/1.rac`, ALWAYS check the parent file imports it.
+
+### Unresolved Imports ⚠️ NEW
+```yaml
+# BAD - imports file that doesn't exist
+imports:
+  - 26/1222#net_capital_gain  # ← Does 26/1222.rac exist? NO!
+
+# Check: Use Glob to verify target file exists
+# If not found, flag as CRITICAL
+```
+
+### Circular References ⚠️ NEW
+```python
+# BAD - direct self-reference
+variable tax:
+  formula: |
+    return tax * 0.5  # References itself!
+
+# BAD - indirect cycle
+variable a:
+  imports: [b]
+  formula: return b + 1
+
+variable b:
+  imports: [a]
+  formula: return a + 1  # a→b→a cycle!
 ```
 
 ## Workflow
