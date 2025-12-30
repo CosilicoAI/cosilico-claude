@@ -207,6 +207,38 @@ Before marking an encoding complete, verify:
 - [ ] For deductions: checked for caps and phaseouts
 - [ ] Cross-references traced to their definitions
 
+## ⚠️ COMPILER-DRIVEN VALIDATION (RUN AFTER EVERY FILE)
+
+**After writing EACH .rac file**, run the test runner to catch errors immediately:
+
+```bash
+cd /Users/maxghenis/CosilicoAI/cosilico-engine
+source .venv/bin/activate
+python -m cosilico.test_runner /path/to/file.rac
+```
+
+**Example output showing errors:**
+```
+✗ adjusted_net_capital_gain::NCG plus qualified dividends
+    ERROR: Undefined variable: net_capital_gain
+✗ <file>::statute/26/1/h/1.rac
+    ERROR: Import path missing #variable at line 67
+```
+
+**If ANY test fails or errors:**
+1. Read the error message
+2. Fix the issue in the .rac file
+3. Re-run the test runner
+4. Repeat until ALL tests pass
+
+**Do NOT proceed to the next file until current file passes all tests.**
+
+This catches:
+- Undefined variables
+- Import syntax errors
+- Formula evaluation errors
+- Test assertion failures
+
 ## ⚠️ MANDATORY COMPLETION CHECKS
 
 Before marking any encoding complete, you MUST verify:
@@ -300,13 +332,36 @@ variable my_var:
 - [ ] Every variable has `tests:` block
 - [ ] Tests cover basic case, edge cases, zero case
 
+## ⚠️ FINAL VALIDATION: PE/TAXSIM Comparison
+
+After ALL files pass the test runner, run validation against PolicyEngine/TAXSIM:
+
+```bash
+cd /Users/maxghenis/CosilicoAI/cosilico-validators
+source .venv/bin/activate
+python -c "
+from cosilico_validators.cps.runner import CPSValidationRunner
+runner = CPSValidationRunner(year=2024)
+results = runner.run()
+for name, result in results.items():
+    if result.pe_comparison:
+        print(f'{name}: {result.pe_comparison.match_rate:.1%} match')
+"
+```
+
+**Target: >99% match rate.** If lower:
+1. Check mismatch examples
+2. Fix formula logic
+3. Re-run validation
+
 ## DO NOT
 
 - Write tests separately (put them inline in the variable's `tests:` block)
-- Validate against PolicyEngine (validator agent does this)
+- Skip running the test runner after each file
 - Guess at values - fetch from authoritative source
 - Simplify formulas beyond what the statute says
 - Mix content from different subsections in one file
 - Leave imports unresolved
 - Skip parent file integration when creating subdirectories
 - Leave any variable without tests
+- Mark encoding complete until test runner passes AND PE validation >99%
