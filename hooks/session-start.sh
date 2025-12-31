@@ -6,9 +6,19 @@ SESSION_FILE="$HOME/.autorac_session"
 # Read JSON input from stdin
 INPUT=$(cat)
 
-# Extract model and cwd from input
-MODEL=$(echo "$INPUT" | jq -r '.permission_mode // "unknown"')
+# Try to get model from various sources
+MODEL="${ANTHROPIC_MODEL:-${CLAUDE_MODEL:-}}"
+if [ -z "$MODEL" ]; then
+    # Fall back to checking settings or use source as identifier
+    SOURCE=$(echo "$INPUT" | jq -r '.source // "unknown"')
+    MODEL="claude-$SOURCE"
+fi
+
+# Get working directory
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
+if [ -z "$CWD" ]; then
+    CWD=$(pwd)
+fi
 
 # Start session and capture the ID
 SESSION_ID=$(autorac session-start --model="$MODEL" --cwd="$CWD" 2>/dev/null)
