@@ -24,13 +24,11 @@ statute/26/121/a.rac      →  26 USC § 121(a)
 ### Mandatory Pre-Encoding Workflow
 
 1. **Parse the target filepath** to understand which subsection you're encoding
-2. **FETCH THE ACTUAL STATUTE TEXT** from Supabase (preferred) or Cornell LII
-   - **Supabase query** (1.2M+ rules): `arch sb usc/{title}/{section}` or query directly:
-     ```
-     curl -s "https://nsupqhfchdtqclomlrgs.supabase.co/rest/v1/rules?source_path=eq.usc/{title}/{section}&select=heading,body" \
-       -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdXBxaGZjaGR0cWNsb21scmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzExMDgsImV4cCI6MjA4MjUwNzEwOH0.BPdUadtBCdKfWZrKbfxpBQUqSGZ4hd34Dlor8kMBrVI"
-     ```
-   - **Fallback**: WebFetch from law.cornell.edu/uscode/text/{title}/{section}
+2. **FETCH THE ACTUAL STATUTE TEXT** - Try these sources in order:
+   - **Local USC XML** (fastest, preferred): `autorac statute "26 USC 25B"`
+     - Uses USLM XML from arch/data/uscode/ (~50 titles available)
+     - Instant, no network needed
+   - **Fallback: WebFetch** from law.cornell.edu/uscode/text/{title}/{section}
 3. **Quote the exact text** of the subsection in your file's `text:` field
 4. **Only encode what that subsection says** - nothing more, nothing less
 
@@ -116,7 +114,7 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
 
 ## Workflow
 
-1. **Fetch statute text** - Query Supabase (`arch sb`) or use WebFetch for Cornell LII fallback
+1. **Fetch statute text** - Use `autorac statute "26 USC 32"` (local XML, fastest) or WebFetch for Cornell LII fallback
 2. **Verify citation** - Confirm the filepath matches what you're encoding
 3. **Quote exact text** - Add the verbatim subsection text to `text:` field
 4. **Analyze structure** - Identify definitions, eligibility, formulas, phase-outs, exceptions
@@ -249,7 +247,8 @@ Do NOT add:
 Before encoding any section, **READ ALL SUBSECTIONS** to understand the full picture:
 
 ```bash
-# For 26 USC § 1, fetch and read ALL subsections from law.cornell.edu
+# For 26 USC § 1, fetch and read ALL subsections
+autorac statute "26 USC 1"
 # Returns: (a), (b), (c), (d), (e), (f), (g), (h), (i), (j)
 ```
 
