@@ -1,6 +1,6 @@
 {
   "name": "cosilico",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Encode tax and benefit law into executable DSL with multi-system validation",
   "author": {
     "name": "Cosilico"
@@ -8,7 +8,6 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -20,7 +19,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "",
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
@@ -32,7 +31,6 @@
     ],
     "SessionEnd": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
