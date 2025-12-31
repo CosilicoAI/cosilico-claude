@@ -1,7 +1,14 @@
 #!/bin/bash
 # PostToolUse Hook - logs tool calls to autorac session
 
-# Skip if no session
+SESSION_FILE="$HOME/.autorac_session"
+
+# Get session ID from env or file
+if [ -z "$AUTORAC_SESSION_ID" ] && [ -f "$SESSION_FILE" ]; then
+    AUTORAC_SESSION_ID=$(cat "$SESSION_FILE")
+fi
+
+# Skip if still no session
 if [ -z "$AUTORAC_SESSION_ID" ]; then
     exit 0
 fi
