@@ -1,105 +1,138 @@
 ---
-description: "Encode a tax/benefit statute section into Cosilico DSL with validation"
-argument-hint: "<citation> (e.g., '26 USC 32' for EITC)"
+description: "Encode a statute into RAC format with validation and calibration"
+argument-hint: "<citation> (e.g., '26 USC 32(c)(2)(A)')"
 ---
 
-# Encode Policy Command
+# Encode Statute Command
 
-You are encoding tax and benefit law into executable Cosilico DSL. Follow this workflow:
+Encode a tax/benefit statute into RAC DSL with full validation and calibration tracking.
 
 ## Arguments
-- `$ARGUMENTS` - The statute citation to encode (e.g., "26 USC 32" for EITC, "26 USC 24" for CTC)
+- `$ARGUMENTS` - The statute citation (e.g., "26 USC 32" for EITC, "26 USC 24(d)" for CTC refundability)
 
 ## Workflow
 
-### 1. Fetch the statute text
-If the statute isn't already in lawarchive, fetch it:
-- Use WebSearch to find the official statute text
-- Look for uscode.house.gov or Cornell LII sources
-- Save raw text to `lawarchive/statutes/{title}/{section}/text.md`
+### 1. Predict scores BEFORE encoding
+Rate your confidence on each dimension (1-10):
 
-### 2. Analyze the statute structure
-Break down the statute into:
-- Definitions
-- Eligibility rules
-- Calculation formulas
-- Phase-ins/phase-outs
-- Special cases and exceptions
-- Inflation indexing rules
-
-### 3. Generate DSL code
-Create Cosilico DSL following these patterns:
-
-```python
-# File: lawarchive/encoded/{title}/{section}/variables.py
-from cosilico import Variable, Entity, Period, Formula
-
-class VariableName(Variable):
-    """
-    Description from statute.
-
-    Citation: {title} USC § {section}({subsection})
-    """
-    entity = Person  # or TaxUnit, Household, etc.
-    definition_period = Year  # or Month
-    value_type = float  # or bool, int
-
-    def formula(self, period, parameters):
-        # Implementation matching statute language
-        pass
+```
+Predictions for $ARGUMENTS:
+- RAC Format Compliance: X/10
+- Formula Correctness: X/10
+- Parameter Coverage: X/10
+- Integration Quality: X/10
+- CI Pass: yes/no
+- Confidence: X%
 ```
 
-### 4. Create test cases
-Generate test cases in YAML format:
+### 2. Fetch statute text if needed
+Check if statute text exists in `arch/statute/`:
+```bash
+ls ~/CosilicoAI/arch/statute/{title}/{section}/
+```
+
+If not, fetch from official sources (uscode.house.gov, Cornell LII) and save to arch.
+
+### 3. Encode using RAC DSL v2 format
+
+Read the spec first:
+```bash
+cat ~/CosilicoAI/rac-us/RAC_SPEC.md
+```
+
+Create the .rac file at `rac-us/statute/{title}/{section}.rac`:
 
 ```yaml
-# File: lawarchive/encoded/{title}/{section}/tests.yaml
-test_cases:
-  - name: "Descriptive test name"
-    inputs:
-      variable_name: value
-    expected:
-      output_variable: expected_value
-    citation: "{title} USC § {section}"
+# Example structure (see RAC_SPEC.md for full format)
+text: """
+[Statute text here]
+"""
+
+parameter threshold_amount:
+  values:
+    2024-01-01: 10000
+
+variable calculation_result:
+  imports: [26/1#taxable_income]
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  label: "Result Label"
+  description: "From {citation}"
+  formula: |
+    # Only -1, 0, 1, 2, 3 as literals - everything else parameterized
+    income = taxable_income(tax_unit, period)
+    if income > threshold_amount:
+        return income - threshold_amount
+    return 0
+  default: 0
+  tests:
+    - name: "Basic case"
+      period: 2024-01
+      inputs:
+        taxable_income: 15000
+      expect: 5000
 ```
 
-### 5. Validate against PolicyEngine
-Run the test cases against PolicyEngine to verify accuracy:
-
+### 4. Run CI validation
 ```bash
-cd ~/CosilicoAI/cosilico-validators
+cd ~/CosilicoAI/rac
 source .venv/bin/activate
 python -c "
-from cosilico_validators import ConsensusEngine, TestCase
-from cosilico_validators.validators.policyengine import PolicyEngineValidator
+from rac.dsl_parser import parse_file
+from rac.test_runner import run_tests_for_file
+from pathlib import Path
 
-validators = [PolicyEngineValidator()]
-engine = ConsensusEngine(validators, tolerance=15.0)
-
-# Run test case
-result = engine.validate(test_case, variable, year)
-print(result.summary())
+rac_file = Path('$RAC_FILE_PATH')
+try:
+    result = parse_file(rac_file)
+    print('Parse: PASSED')
+    test_results = run_tests_for_file(rac_file)
+    passed = sum(1 for t in test_results if t.passed)
+    total = len(test_results)
+    print(f'Tests: {passed}/{total} passed')
+except Exception as e:
+    print(f'Parse: FAILED - {e}')
 "
 ```
 
-### 6. Report results
-Summarize:
-- Variables encoded
-- Test case results
-- Validation status
-- Any discrepancies found
+### 5. Compare predictions to actuals
+After validation, report calibration:
 
-## Key Principles
+```
+Results for $ARGUMENTS:
+                    Predicted    Actual    Error
+RAC Format:         X/10        Y/10      +/-Z
+Formula:            X/10        Y/10      +/-Z
+Parameters:         X/10        Y/10      +/-Z
+Integration:        X/10        Y/10      +/-Z
+CI Pass:            yes/no      yes/no    match/miss
 
-1. **Citation traceability**: Every formula must cite the exact statute subsection
-2. **No magic numbers**: All dollar amounts must reference parameters, not hardcoded values
-3. **Inflation indexing**: Encode the indexing RULE, not current values
-4. **Test coverage**: Create tests for phase-in, plateau, phase-out, and edge cases
+Overall calibration: [good/needs improvement]
+```
 
-## Example
+### 6. Suggest improvements
+If there were failures or significant prediction errors, suggest:
+- Documentation improvements
+- Agent prompt changes
+- DSL enhancements
+- Validator updates
 
-For `26 USC 32` (EITC):
-- `eitc_phase_in_rate` - from §32(b)(1)
-- `eitc_maximum_credit` - from §32(b)(2)
-- `eitc_phase_out_start` - from §32(b)(2)
-- `eitc` - main credit calculation combining all components
+## Key Rules
+
+1. **No magic numbers**: Only -1, 0, 1, 2, 3 allowed as literals
+2. **Citation traceability**: Every variable references its statute section
+3. **Parameterize everything**: Dollar amounts, rates, thresholds all as parameters
+4. **Inline tests**: Every variable has test cases in the same file
+5. **Import syntax**: `imports: [path#variable]` for cross-file dependencies
+
+## Output Location
+
+```
+rac-us/statute/{title}/{section}.rac
+
+Examples:
+- 26 USC 32      → rac-us/statute/26/32.rac
+- 26 USC 32(c)   → rac-us/statute/26/32/c.rac
+- 7 USC 2017(a)  → rac-us/statute/7/2017/a.rac
+```
