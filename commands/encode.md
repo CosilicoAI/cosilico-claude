@@ -14,85 +14,73 @@ Encode a tax/benefit statute into RAC DSL with full validation and calibration t
 
 ### Step 1: Record Predictions
 
-Before encoding, predict scores for calibration:
+Before encoding, predict:
 
 ```
 Predictions for $ARGUMENTS:
-- RAC Format: X/10 (syntax, structure, naming)
-- Formula: X/10 (logic correctness, edge cases)
-- Parameters: X/10 (no magic numbers, proper dates)
-- Integration: X/10 (imports resolve, fits dependency graph)
-- CI Pass: yes/no
+- Iterations to pass: X (1 = first try success)
+- Expected errors: [none | parse | test | import | ...]
+- Time estimate: X minutes
 - Confidence: X%
+
+After passing:
+- RAC Format: X/10
+- Formula: X/10
+- Parameters: X/10
+- Integration: X/10
 ```
 
-### Step 2: Invoke RAC Encoder Agent
+### Step 2: Invoke RAC Encoder Agent (with iteration)
 
-Use the Task tool to invoke the RAC Encoder agent:
+Use Task tool to invoke RAC Encoder. Track start time.
 
 ```
 Task(
   subagent_type="cosilico:RAC Encoder",
-  prompt="Encode $ARGUMENTS into RAC format. Output to rac-us/statute/{path}.rac",
+  prompt="Encode $ARGUMENTS into RAC format. Output to rac-us/statute/{path}.rac
+         Run CI validation after writing. If it fails, fix and retry (max 3 iterations).",
   model="opus"
 )
 ```
 
-The agent will:
-- Fetch statute text if needed
-- Read RAC_SPEC.md for format
-- Create the .rac file with text, parameters, variables, tests
-
 ### Step 3: Validate with autorac
 
-Run validation to get actual scores:
+After agent completes, run validation:
 
 ```bash
-cd ~/CosilicoAI/autorac
-source .venv/bin/activate
+cd ~/CosilicoAI/autorac && source .venv/bin/activate
 autorac validate ~/CosilicoAI/rac-us/statute/{path}.rac --json
 ```
 
-This returns:
-- CI pass/fail (parse + inline tests)
-- Reviewer scores (rac, formula, param, integration)
-- Any errors
-
 ### Step 4: Log to Experiment DB
 
-Record predictions vs actuals:
+Record with iteration tracking:
 
 ```bash
 autorac log \
   --citation="$ARGUMENTS" \
   --file=~/CosilicoAI/rac-us/statute/{path}.rac \
-  --predicted='{"rac":X,"formula":X,"param":X,"integration":X,"ci_pass":true}' \
-  --actual='{"rac":Y,"formula":Y,"param":Y,"integration":Y,"ci_pass":true}' \
+  --predicted='{"iterations":X,"errors":["..."],"time":X,"rac":X,"formula":X}' \
+  --actual='{"iterations":Y,"errors":["..."],"time":Y,"rac":Y,"formula":Y}' \
   --db=~/CosilicoAI/autorac/experiments.db
 ```
 
 ### Step 5: Report Calibration
 
-Compare predictions to actuals:
-
 ```
 Results for $ARGUMENTS:
-                    Predicted    Actual    Error
-RAC Format:         X/10        Y/10      +/-Z
-Formula:            X/10        Y/10      +/-Z
-Parameters:         X/10        Y/10      +/-Z
-Integration:        X/10        Y/10      +/-Z
-CI Pass:            yes/no      yes/no    match/miss
+                    Predicted    Actual
+Iterations:         X           Y         [+/-Z | exact]
+Errors:             [...]       [...]     [match | missed | unexpected]
+Time:               X min       Y min     [+/-Z]
+RAC Format:         X/10        Y/10
+Formula:            X/10        Y/10
+Parameters:         X/10        Y/10
+Integration:        X/10        Y/10
 
-Calibration: [good/overconfident/underconfident]
+Calibration: [good | overconfident | underconfident]
+Key insight: [what to adjust for next time]
 ```
-
-### Step 6: Iterate if Failed
-
-If validation failed, use feedback to improve:
-1. Read the errors from `autorac validate`
-2. Re-invoke RAC Encoder agent with specific fixes
-3. Re-validate until passing or max iterations (3)
 
 ## Output Location
 
