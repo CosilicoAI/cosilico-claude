@@ -77,6 +77,7 @@ variable acp_device_subsidy:
 - [ ] Cross-references resolved correctly (e.g., "as defined in section X")
 - [ ] Temporal applicability correct (effective dates, sunsets)
 - [ ] Comments cite specific subsections (e.g., "per 26 USC 63(b)(1)")
+- [ ] **⚠️ NEW: Use built-in functions** - If formula manually computes progressive brackets, flag and recommend `marginal_agg()`
 
 ### 2. Parameterization (Weight: 15%)
 - [ ] NO hardcoded numeric literals except -1, 0, 1, 2, 3
@@ -85,6 +86,8 @@ variable acp_device_subsidy:
 - [ ] Parameter names are statute-neutral (no "pre_tcja_", "aca_", etc.)
 - [ ] Parameters include `reference:` citing source
 - [ ] **Variable names don't embed parameter values** (no "fifteen_rate", "65_threshold", etc.)
+- [ ] **⚠️ NEW: Parameter values trace to STATUTE only** - Not IRS guidance (Rev. Proc., Notice, etc.)
+- [ ] **⚠️ NEW: Tax brackets use array-based `brackets:` parameter** - NOT individual rate_bracket_1, threshold_single_1, etc.
 
 ### 3. Schema Correctness (Weight: 15%)
 - [ ] Entity is valid: Person, TaxUnit, Household, Family, etc.
@@ -98,6 +101,7 @@ variable acp_device_subsidy:
 - [ ] **Parent file imports subdirectory** - If reviewing h/1.rac, check that 1.rac imports from h/
 - [ ] **No orphaned files** - Subdirectory files should be imported somewhere
 - [ ] **Import chain complete** - Follow imports and verify each target file exists
+- [ ] **⚠️ NEW: File path depth matches content** - TCJA rates belong in 26/1/j/2.rac, not 26/1.rac; section-level content needs subsection files
 
 ### 4. Test Coverage (Weight: 20%)
 - [ ] Has inline `tests:` block
