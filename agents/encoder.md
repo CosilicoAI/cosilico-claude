@@ -163,12 +163,46 @@ statute/26/121/a.rac      →  26 USC § 121(a)
 
 1. **Parse the target filepath** to understand which subsection you're encoding
 2. **FETCH THE ACTUAL STATUTE TEXT** - Try these sources in order:
-   - **Local USC XML** (fastest, preferred): `autorac statute "26 USC 25B"`
-     - Uses USLM XML from arch/data/uscode/ (~50 titles available)
-     - Instant, no network needed
-   - **Fallback: WebFetch** from law.cornell.edu/uscode/text/{title}/{section}
-3. **Quote the exact text** of the subsection in your file's `text:` field
-4. **Only encode what that subsection says** - nothing more, nothing less
+   - **Supabase arch.rules** (1.2M+ statutes with line_count for size-aware chunking):
+     ```bash
+     curl -s "https://nsupqhfchdtqclomlrgs.supabase.co/rest/v1/rules?source_path=like.usc/{title}/{section}*&select=id,heading,body,line_count,citation_path&order=citation_path" \
+       -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdXBxaGZjaGR0cWNsb21scmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzExMDgsImV4cCI6MjA4MjUwNzEwOH0.BPdUadtBCdKfWZrKbfxpBQUqSGZ4hd34Dlor8kMBrVI" \
+       -H "Accept-Profile: arch"
+     ```
+   - **Local USC XML** (fallback): `autorac statute "26 USC 25B"`
+   - **Cornell LII** (web fallback): WebFetch from law.cornell.edu/uscode/text/{title}/{section}
+3. **Check line_count** to determine encoding strategy (see Size-Aware Encoding below)
+4. **Quote the exact text** of the subsection in your file's `text:` field
+5. **Only encode what that subsection says** - nothing more, nothing less
+
+### Size-Aware Encoding (Using line_count)
+
+The `line_count` column tells you how many lines of text each statute section has. Use it to plan your encoding:
+
+| line_count | Strategy | Action |
+|------------|----------|--------|
+| `0` | Skip | Empty placeholder, no text to encode |
+| `1-100` | Direct | Encode entire section in one .rac file |
+| `101-500` | Split | Query subsections, create one .rac per subsection |
+| `500+` | Chunk | Break into logical groups, encode leaf-first |
+
+**Query to analyze section sizes:**
+```bash
+# Get size overview for a section
+curl -s "https://nsupqhfchdtqclomlrgs.supabase.co/rest/v1/rules?source_path=like.usc/26/32%25&select=citation_path,line_count&order=citation_path" \
+  -H "apikey: eyJ..." -H "Accept-Profile: arch" | jq '.[] | "\(.citation_path): \(.line_count) lines"'
+
+# Example output:
+# "usc/26/32/a: 45 lines"      → encode directly
+# "usc/26/32/b: 180 lines"     → split into b/1, b/2, b/3
+# "usc/26/32/c: 520 lines"     → chunk by subsection
+```
+
+**Chunking rules:**
+1. Never encode >200 lines in a single .rac file
+2. Start with leaf nodes (smallest line_count first)
+3. Parent files just import from children
+4. Verify each chunk passes test runner before moving up
 
 ### Capitalization Must Match Statute Convention
 
