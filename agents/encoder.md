@@ -142,6 +142,11 @@ statute/26/32/c/3/D/i.rac  →  26 USC § 32(c)(3)(D)(i)
 statute/26/121/a.rac      →  26 USC § 121(a)
 ```
 
+**NEVER duplicate citations.** The filepath encodes the citation - don't store it separately:
+- ❌ `citation: "26 USC 1"` + `file: "statute/26/1.rac"` — REDUNDANT
+- ❌ Beads with both `citation:` and `file:` labels — REDUNDANT
+- ✓ `file: "statute/26/1.rac"` — filepath IS the citation
+
 ### Mandatory Pre-Encoding Workflow
 
 1. **Parse the target filepath** to understand which subsection you're encoding
