@@ -1,20 +1,50 @@
 #!/usr/bin/env python3
 """
-Log subagent transcripts to Supabase automatically.
+Log subagent transcripts to LOCAL SQLite first, bulk upload later.
 
 This hook fires ONLY for Task tool calls (subagent spawns) and captures
-the full transcript from the JSONL file.
+the full transcript from the JSONL file to a local database.
+
+Bulk upload to Supabase happens via session-end hook or manual sync.
 """
 
 import json
 import os
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
 
-# Supabase config
-SUPABASE_URL = "https://nsupqhfchdtqclomlrgs.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdXBxaGZjaGR0cWNsb21scmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzExMDgsImV4cCI6MjA4MjUwNzEwOH0.BPdUadtBCdKfWZrKbfxpBQUqSGZ4hd34Dlor8kMBrVI"
+# Local DB path - in autorac directory
+LOCAL_DB = Path.home() / "CosilicoAI" / "autorac" / "transcripts.db"
+
+
+def init_db(conn: sqlite3.Connection):
+    """Initialize local SQLite schema."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_transcripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            tool_use_id TEXT UNIQUE NOT NULL,
+            subagent_type TEXT NOT NULL,
+            prompt TEXT,
+            description TEXT,
+            response_summary TEXT,
+            transcript TEXT,  -- JSON string
+            message_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            uploaded_at TEXT  -- NULL until synced to Supabase
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_session
+        ON agent_transcripts(session_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_uploaded
+        ON agent_transcripts(uploaded_at)
+    """)
+    conn.commit()
 
 
 def read_transcript(transcript_path: str) -> list[dict]:
@@ -31,31 +61,34 @@ def read_transcript(transcript_path: str) -> list[dict]:
     return messages
 
 
-def log_to_supabase(data: dict) -> bool:
-    """Log transcript data to Supabase."""
+def log_to_local_db(data: dict) -> bool:
+    """Log transcript data to local SQLite."""
     try:
-        import urllib.request
+        LOCAL_DB.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(LOCAL_DB))
+        init_db(conn)
 
-        url = f"{SUPABASE_URL}/rest/v1/agent_transcripts"
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal"
-        }
-
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(data).encode('utf-8'),
-            headers=headers,
-            method='POST'
-        )
-
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return response.status == 201
+        conn.execute("""
+            INSERT OR REPLACE INTO agent_transcripts
+            (session_id, tool_use_id, subagent_type, prompt, description,
+             response_summary, transcript, message_count, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data["session_id"],
+            data["tool_use_id"],
+            data["subagent_type"],
+            data["prompt"],
+            data["description"],
+            data["response_summary"],
+            data["transcript"],
+            data["message_count"],
+            data["created_at"]
+        ))
+        conn.commit()
+        conn.close()
+        return True
     except Exception as e:
-        # Log error but don't fail the hook
-        print(f"Warning: Failed to log to Supabase: {e}", file=sys.stderr)
+        print(f"Warning: Failed to log to local DB: {e}", file=sys.stderr)
         return False
 
 
@@ -88,16 +121,16 @@ def main():
         "session_id": session_id,
         "tool_use_id": tool_use_id,
         "subagent_type": subagent_type,
-        "prompt": prompt[:1000],  # Truncate long prompts
+        "prompt": prompt[:2000],  # Truncate long prompts
         "description": description,
-        "response_summary": str(tool_response)[:2000] if tool_response else None,
-        "transcript": json.dumps(transcript_messages)[:50000],  # Limit size
+        "response_summary": str(tool_response)[:5000] if tool_response else None,
+        "transcript": json.dumps(transcript_messages),  # Full transcript
         "message_count": len(transcript_messages),
         "created_at": datetime.utcnow().isoformat()
     }
 
-    # Log to Supabase
-    log_to_supabase(log_entry)
+    # Log to local SQLite (fast, no network)
+    log_to_local_db(log_entry)
 
     # Always exit 0 to not block the workflow
     sys.exit(0)
