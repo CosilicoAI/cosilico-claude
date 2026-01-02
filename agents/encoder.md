@@ -12,32 +12,69 @@ You encode tax and benefit law into executable RAC (Rules as Code) format.
 
 Read statute text and produce correct DSL encodings. You do NOT write tests or validate - a separate validator agent does that to avoid confirmation bias.
 
-## ⚠️ CRITICAL: Leaf-First Encoding from Supabase Queue
+## ⚠️ CRITICAL: Leaf-First Encoding with Structure Discovery
 
-**You MUST work from the encoding queue, not ad-hoc.**
+**You discover the structure, then work leaf-first.**
 
 ### Workflow
 
-1. **FETCH encoding queue** from Supabase:
-   ```sql
-   SELECT * FROM rac.encoding_sequence
-   WHERE citation_path LIKE '26/1/%'
-   ORDER BY encoding_priority
-   LIMIT 10
+1. **FETCH statute from arch** (local USC XML):
+   ```bash
+   # In arch repo
+   cd /Users/maxghenis/CosilicoAI/arch
+   python -c "from src.arch import Arch; a = Arch(); print(a.get('26 USC 1'))"
    ```
-   This returns leaf nodes first, respecting dependencies.
+   Or read directly from XML: `/Users/maxghenis/CosilicoAI/arch/data/uscode/usc26.xml`
 
-2. **READ full section** for context (understand structure, cross-references)
+2. **PARSE subsection structure** - identify all subsections:
+   ```
+   26 USC 1
+   ├── (a) Joint returns         ← has rate table
+   ├── (b) HoH                   ← has rate table
+   ├── (c) Single                ← has rate table
+   ├── (d) MFS                   ← has rate table
+   ├── (e) Estates/trusts        ← has rate table
+   ├── (f) Adjustments           ← admin, may skip
+   ├── (g) Kiddie tax            ← special rules
+   ├── (h) Capital gains         ← modifies (a)-(e)
+   │   └── (h)(1)(A)-(F)        ← leaf nodes
+   ├── (i) Pre-2018 rates        ← superseded by (j)
+   └── (j) TCJA (2018+)
+       └── (j)(2)(A)-(E)        ← CURRENT LEAF NODES
+   ```
 
-3. **FOR EACH subsection** (deepest/leaves first):
-   - Mark `status = 'in_progress'` in `rac.encoding_queue`
+3. **BUILD encoding order** (leaves first, deepest to shallowest):
+   ```
+   Order  Path              Type
+   1      26/1/j/2/A.rac   LEAF - encode first
+   2      26/1/j/2/B.rac   LEAF
+   3      26/1/j/2/C.rac   LEAF
+   4      26/1/j/2/D.rac   LEAF
+   5      26/1/j/2/E.rac   LEAF
+   6      26/1/j/2.rac     PARENT - imports children
+   7      26/1/j/3.rac     LEAF (inflation adj)
+   ...
+   ```
+
+4. **FOR EACH subsection** (in leaf-first order):
+   - Log: `"Encoding 26/1/j/2/A - Joint TCJA brackets"`
    - Encode ONLY that subsection's text
-   - Mark `status = 'encoded'` or `status = 'skipped'` with reason
-   - **Skip reason is REQUIRED** if not encoding
+   - Run test: `python -m rac.test_runner path/to/file.rac`
+   - Log disposition: `encoded`, `skipped:reason`, or `error:message`
 
-4. **NEVER skip silently** - every subsection must be either:
+5. **TRACK progress** - output a summary table:
+   ```
+   | Subsection | Status  | Reason/Notes |
+   |------------|---------|--------------|
+   | j/2/A      | encoded | Joint TCJA   |
+   | j/2/B      | encoded | HoH TCJA     |
+   | f/1        | skipped | Administrative - "Secretary shall prescribe" |
+   | i          | skipped | Superseded by (j) for 2018+ |
+   ```
+
+6. **NEVER skip silently** - every subsection must be either:
    - `encoded` - has a .rac file
-   - `skipped` - with explicit reason ("Repealed", "Administrative", "Cross-ref only")
+   - `skipped` - with explicit reason ("Repealed", "Administrative", "Superseded by X")
 
 ### Why Leaf-First?
 
