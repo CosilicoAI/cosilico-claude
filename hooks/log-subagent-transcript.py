@@ -25,12 +25,13 @@ def init_db(conn: sqlite3.Connection):
         CREATE TABLE IF NOT EXISTS agent_transcripts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
+            agent_id TEXT,
             tool_use_id TEXT UNIQUE NOT NULL,
             subagent_type TEXT NOT NULL,
             prompt TEXT,
             description TEXT,
             response_summary TEXT,
-            transcript TEXT,  -- JSON string
+            transcript TEXT,  -- JSON string (agent-specific, not main session)
             message_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             uploaded_at TEXT  -- NULL until synced to Supabase
@@ -70,11 +71,12 @@ def log_to_local_db(data: dict) -> bool:
 
         conn.execute("""
             INSERT OR REPLACE INTO agent_transcripts
-            (session_id, tool_use_id, subagent_type, prompt, description,
+            (session_id, agent_id, tool_use_id, subagent_type, prompt, description,
              response_summary, transcript, message_count, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data["session_id"],
+            data["agent_id"],
             data["tool_use_id"],
             data["subagent_type"],
             data["prompt"],
@@ -122,20 +124,35 @@ def main():
     prompt = tool_input.get("prompt", "")
     description = tool_input.get("description", "")
 
-    # Read full transcript if available
+    # Get agentId from tool_response to find subagent-specific transcript
+    agent_id = tool_response.get("agentId", "")
+
+    # Build path to agent-specific transcript (agent-{agentId}.jsonl)
+    agent_transcript_path = None
+    if agent_id and transcript_path:
+        transcript_dir = os.path.dirname(transcript_path)
+        agent_transcript_path = os.path.join(transcript_dir, f"agent-{agent_id}.jsonl")
+
+    # Read agent-specific transcript (not the main session)
     transcript_messages = []
-    if transcript_path and os.path.exists(transcript_path):
-        transcript_messages = read_transcript(transcript_path)
+    if agent_transcript_path and os.path.exists(agent_transcript_path):
+        transcript_messages = read_transcript(agent_transcript_path)
+        with open(debug_file, "a") as f:
+            f.write(f"Read agent transcript: {agent_transcript_path} ({len(transcript_messages)} messages)\n")
+    elif agent_id:
+        with open(debug_file, "a") as f:
+            f.write(f"Agent transcript not found: {agent_transcript_path}\n")
 
     # Build log entry
     log_entry = {
         "session_id": session_id,
+        "agent_id": agent_id,
         "tool_use_id": tool_use_id,
         "subagent_type": subagent_type,
         "prompt": prompt[:2000],  # Truncate long prompts
         "description": description,
         "response_summary": str(tool_response)[:5000] if tool_response else None,
-        "transcript": json.dumps(transcript_messages),  # Full transcript
+        "transcript": json.dumps(transcript_messages),  # Agent-specific transcript
         "message_count": len(transcript_messages),
         "created_at": datetime.utcnow().isoformat()
     }
