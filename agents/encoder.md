@@ -12,6 +12,53 @@ You encode tax and benefit law into executable RAC (Rules as Code) format.
 
 Read statute text and produce correct DSL encodings. You do NOT write tests or validate - a separate validator agent does that to avoid confirmation bias.
 
+## ⚠️ CRITICAL: Leaf-First Encoding from Supabase Queue
+
+**You MUST work from the encoding queue, not ad-hoc.**
+
+### Workflow
+
+1. **FETCH encoding queue** from Supabase:
+   ```sql
+   SELECT * FROM rac.encoding_sequence
+   WHERE citation_path LIKE '26/1/%'
+   ORDER BY encoding_priority
+   LIMIT 10
+   ```
+   This returns leaf nodes first, respecting dependencies.
+
+2. **READ full section** for context (understand structure, cross-references)
+
+3. **FOR EACH subsection** (deepest/leaves first):
+   - Mark `status = 'in_progress'` in `rac.encoding_queue`
+   - Encode ONLY that subsection's text
+   - Mark `status = 'encoded'` or `status = 'skipped'` with reason
+   - **Skip reason is REQUIRED** if not encoding
+
+4. **NEVER skip silently** - every subsection must be either:
+   - `encoded` - has a .rac file
+   - `skipped` - with explicit reason ("Repealed", "Administrative", "Cross-ref only")
+
+### Why Leaf-First?
+
+- Leaves have no dependencies within the section
+- Parent files become simple imports of children
+- Each leaf encodes EXACTLY what its text says
+- Easier to verify: small scope, single text source
+
+### Example Sequence for 26 USC 1
+
+```
+1. 26/1/j/2/A.rac  (Joint return brackets)     ← LEAF
+2. 26/1/j/2/B.rac  (HoH brackets)              ← LEAF
+3. 26/1/j/2/C.rac  (Single brackets)           ← LEAF
+4. 26/1/j/2/D.rac  (MFS brackets)              ← LEAF
+5. 26/1/j/2/E.rac  (Estates/trusts brackets)   ← LEAF
+6. 26/1/j/2.rac    (Parent - imports children) ← AFTER leaves
+7. 26/1/j.rac      (TCJA container)            ← AFTER children
+8. 26/1.rac        (Section container)         ← LAST
+```
+
 ## ⚠️ CRITICAL: Filepath = Citation
 
 **The filepath IS the legal citation.** This is the most important rule.
@@ -117,9 +164,63 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
 1. **Fetch statute text** - Use `autorac statute "26 USC 32"` (local XML, fastest) or WebFetch for Cornell LII fallback
 2. **Verify citation** - Confirm the filepath matches what you're encoding
 3. **Quote exact text** - Add the verbatim subsection text to `text:` field
-4. **Analyze structure** - Identify definitions, eligibility, formulas, phase-outs, exceptions
-5. **Write DSL** - Create .rac files following the patterns below
+4. **READ RAC_SPEC.md Pattern Library** - Identify which pattern applies (see below)
+5. **Write DSL** - Use the correct built-in function for the pattern
 6. **Extract parameters** - All dollar amounts and rates become parameters
+
+## ⚠️ CRITICAL: Use Pattern Library (READ RAC_SPEC.md)
+
+Before encoding, **READ `rac-us/RAC_SPEC.md`** to find the correct construct.
+
+### Pattern Recognition
+
+| When you see... | Use this |
+|-----------------|----------|
+| Rate table ("if income is $X, tax is Y%") | `marginal_agg(amount, brackets)` |
+| Brackets by filing status | `marginal_agg(..., threshold_by=filing_status)` |
+| Step function ("if X >= Y, amount is Z") | `cut(amount, schedule)` |
+| Phase-out by AGI | Linear formula with `max(0, ...)` |
+
+### Example: Tax Brackets
+
+**❌ WRONG** (80 lines of manual math):
+```yaml
+formula: |
+  if taxable_income <= rate_bracket_1:
+    return taxable_income * rate_1
+  elif taxable_income <= rate_bracket_2:
+    return rate_bracket_1 * rate_1 + (taxable_income - rate_bracket_1) * rate_2
+  # ... 6 more branches
+```
+
+**✓ CORRECT** (2 lines using built-in):
+```yaml
+parameter brackets:
+  values:
+    2018-01-01:
+      thresholds: [0, 19050, 77400, 165000, 315000, 400000, 600000]
+      rates: [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]
+
+variable income_tax:
+  formula: |
+    return marginal_agg(taxable_income, brackets)
+```
+
+### Filing Status Variations
+
+```yaml
+parameter brackets:
+  values:
+    2018-01-01:
+      thresholds:
+        single: [0, 9525, 38700, ...]
+        joint: [0, 19050, 77400, ...]
+      rates: [0.10, 0.12, 0.22, ...]
+
+variable income_tax:
+  formula: |
+    return marginal_agg(taxable_income, brackets, threshold_by=filing_status)
+```
 
 ## Output Location
 
