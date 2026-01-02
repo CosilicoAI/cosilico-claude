@@ -1,6 +1,6 @@
 {
   "name": "cosilico",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Encode tax and benefit law into executable DSL with multi-system validation",
   "author": {
     "name": "Cosilico"
@@ -13,6 +13,18 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-subagent-transcript.py",
+            "timeout": 15
           }
         ]
       }
