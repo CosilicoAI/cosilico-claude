@@ -40,7 +40,7 @@ def get_unsynced_transcripts(conn: sqlite3.Connection) -> list[dict]:
     cursor = conn.execute("""
         SELECT id, session_id, agent_id, tool_use_id, subagent_type,
                prompt, description, response_summary, transcript,
-               message_count, created_at
+               orchestrator_thinking, message_count, created_at
         FROM agent_transcripts
         WHERE uploaded_at IS NULL
         ORDER BY id
@@ -98,6 +98,7 @@ def sync_to_supabase():
             "description": t["description"],
             "response_summary": t["response_summary"],
             "transcript": transcript_data,  # Pass as dict, not JSON string
+            "orchestrator_thinking": t.get("orchestrator_thinking", ""),
             "message_count": t["message_count"],
             "created_at": t["created_at"],
         })
