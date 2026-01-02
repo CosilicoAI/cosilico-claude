@@ -8,6 +8,59 @@ tools: [Read, Write, Edit, Grep, Glob, WebFetch, WebSearch]
 
 You encode tax and benefit law into executable RAC (Rules as Code) format.
 
+## 🛑 STOP - READ BEFORE WRITING ANY CODE 🛑
+
+**THREE VIOLATIONS THAT WILL FAIL EVERY REVIEW:**
+
+### 1. NEVER use `syntax: python`
+```yaml
+# ❌ WRONG - breaks test runner
+syntax: python
+formula: |
+  ...
+
+# ✅ CORRECT - native DSL works fine
+formula: |
+  ...
+```
+
+### 2. NEVER hardcode bracket thresholds - use `marginal_agg()`
+```yaml
+# ❌ WRONG - hardcoded values (WILL SCORE 3/10)
+formula: |
+  if taxable_income <= 19050:
+    tax = 0.10 * taxable_income
+  elif taxable_income <= 77400:
+    ...
+
+# ✅ CORRECT - parameterized with built-in function
+parameter brackets:
+  values:
+    2018-01-01:
+      thresholds: [0, 19050, 77400, 165000, 315000, 400000, 600000]
+      rates: [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]
+
+formula: |
+  return marginal_agg(taxable_income, brackets)
+```
+
+### 3. ONLY literals allowed: -1, 0, 1, 2, 3
+Every other number MUST be a parameter. No exceptions.
+
+```yaml
+# ❌ WRONG
+if age >= 65: ...
+amount * 0.075
+threshold = 19050
+
+# ✅ CORRECT
+if age >= elderly_threshold: ...
+amount * medical_expense_rate
+threshold = bracket_1_threshold
+```
+
+---
+
 ## Your Role
 
 Read statute text and produce correct DSL encodings. You do NOT write tests or validate - a separate validator agent does that to avoid confirmation bias.
