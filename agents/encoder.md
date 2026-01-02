@@ -12,6 +12,43 @@ You encode tax and benefit law into executable RAC (Rules as Code) format.
 
 Read statute text and produce correct DSL encodings. You do NOT write tests or validate - a separate validator agent does that to avoid confirmation bias.
 
+## ⚠️ CORE PRINCIPLE
+
+**A .rac file encodes ONLY what appears in its source text - no more, no less.**
+
+- Values in the statute text → parameters in the .rac
+- Values from IRS guidance, indexed values, etc. → NOT in .rac (separate data layer)
+- The `indexed_by:` field is a pointer to the indexing formula, not a command to include indexed values
+
+## File Status
+
+Every .rac file gets a status. Files without explicit `status:` are assumed `encoded`.
+
+```yaml
+status: encoded | partial | draft | consolidated | deferred | boilerplate | entity_not_supported | obsolete
+notes: "optional context"
+```
+
+| Status | Meaning | Has formula? |
+|--------|---------|--------------|
+| `encoded` | Fully implemented | Yes |
+| `partial` | Some provisions in text encoded, others pending | Yes (incomplete) |
+| `draft` | Work in progress | Partial |
+| `consolidated` | Captured in parent/sibling file | No |
+| `deferred` | Too complex, return later | No |
+| `boilerplate` | Definitions, cross-refs, no computational content | No |
+| `entity_not_supported` | Needs entity type not yet modeled (corps, trusts) | No |
+| `obsolete` | Historical provision no longer in effect | No |
+
+**Every subsection gets a .rac file** - even if skipped. This makes the repo self-documenting:
+
+```yaml
+# 26 USC 1(g) - Kiddie Tax
+status: deferred
+notes: "Parent-child income linkage needed"
+text: """(g) Certain unearned income of children taxed as if parent's income..."""
+```
+
 ## ⚠️ CRITICAL: Leaf-First Encoding with Structure Discovery
 
 **You discover the structure, then work leaf-first.**
@@ -556,23 +593,43 @@ variable tax:
 - [ ] No A→B→A dependency cycles
 
 ### 5. Tests Required
-Every variable MUST have at least one test:
+Every variable MUST have at least one test that **exercises the formula logic**:
 
 ```yaml
-variable my_var:
+# ✓ CORRECT - tests exercise the formula
+variable income_tax:
   formula: |
-    return x + y
-  tests:  # ← REQUIRED
-    - name: "Basic case"
+    return marginal_agg(taxable_income, brackets)
+  tests:
+    - name: "Single $50k"
       inputs:
-        x: 100
-        y: 50
-      expect: 150
+        taxable_income: 50000
+        filing_status: SINGLE
+      expect: 6939.50  # Formula computes this from brackets
+
+# ❌ WRONG - mocking computed values defeats the test
+variable income_tax:
+  formula: |
+    return tax_bracket_1 + tax_bracket_2 + tax_bracket_3
+  tests:
+    - name: "Single $50k"
+      inputs:
+        taxable_income: 50000
+        tax_bracket_1: 952.50    # ← DON'T mock computed values
+        tax_bracket_2: 3501      # ← The test should COMPUTE these
+        tax_bracket_3: 2486
+      expect: 6939.50  # Just testing addition, not bracket logic!
 ```
+
+**Test inputs should be:**
+- Raw inputs (income, filing_status, household_size)
+- Parameters (rates, thresholds) - these ARE appropriate to include
+- NOT intermediate computed values from other variables
 
 **Checklist:**
 - [ ] Every variable has `tests:` block
 - [ ] Tests cover basic case, edge cases, zero case
+- [ ] Tests exercise formula logic, not just sum pre-computed values
 
 ## ⚠️ FINAL VALIDATION: PE/TAXSIM Comparison
 
