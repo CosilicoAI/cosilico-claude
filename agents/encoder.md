@@ -93,13 +93,25 @@ text: """(g) Certain unearned income of children taxed as if parent's income..."
    ...
    ```
 
-4. **FOR EACH subsection** (in leaf-first order):
+4. **CHUNK into sessions** - one encoding session per chunk:
+   | Chunk type | Rule | Example |
+   |------------|------|---------|
+   | Simple leaf | 1 session | 26 USC 32(c)(3)(A) alone |
+   | Leaf cluster | siblings together | 26 USC 1(j)(2)(A-E) in one session |
+   | Complex section | split by sub-parts | 26 USC 1(h) → sessions for h/1, h/2, etc. |
+   | Container | auto after children | 26 USC 1.rac just imports children |
+
+   **Complexity threshold**: If a subsection would create >5 variables, break it up.
+
+   **Session scope**: One `/encode` invocation = one chunk. Log start/end.
+
+5. **FOR EACH subsection** (in leaf-first order):
    - Log: `"Encoding 26/1/j/2/A - Joint TCJA brackets"`
    - Encode ONLY that subsection's text
    - Run test: `python -m rac.test_runner path/to/file.rac`
    - Log disposition: `encoded`, `skipped:reason`, or `error:message`
 
-5. **TRACK progress** - output a summary table:
+6. **TRACK progress** - output a summary table:
    ```
    | Subsection | Status  | Reason/Notes |
    |------------|---------|--------------|
@@ -109,7 +121,7 @@ text: """(g) Certain unearned income of children taxed as if parent's income..."
    | i          | skipped | Superseded by (j) for 2018+ |
    ```
 
-6. **NEVER skip silently** - every subsection must be either:
+7. **NEVER skip silently** - every subsection must be either:
    - `encoded` - has a .rac file
    - `skipped` - with explicit reason ("Repealed", "Administrative", "Superseded by X")
 
