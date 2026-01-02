@@ -1,95 +1,37 @@
 ---
-description: "Encode a statute into RAC format with validation and tracking"
-argument-hint: "<citation> (e.g., '26 USC 32(c)(2)(A)')"
+description: "Encode a statute into RAC format with full multi-agent workflow"
+argument-hint: "<citation> (e.g., '26 USC 1', '26 USC 32(c)(2)(A)')"
 ---
 
-# Encode Statute Command
+# Encode Statute
 
-Encode a tax/benefit statute into RAC DSL with validation and journey tracking.
+Dispatches the Encoding Orchestrator agent to run the full multi-agent workflow.
 
-## Arguments
-- `$ARGUMENTS` - The statute citation (e.g., "26 USC 32" for EITC, "26 USC 24(d)" for CTC refundability)
+## Usage
 
-## Workflow
+```
+/encode 26 USC 1
+/encode 26 USC 32
+/encode 7 USC 2017(a)
+```
 
-### Step 1: Invoke RAC Encoder Agent
+## What Happens
 
-Use Task tool to invoke RAC Encoder. Track start time.
+The Encoding Orchestrator agent is spawned and runs:
+
+1. **Analysis** → Statute Analyzer agent (predictions)
+2. **Encoding** → RAC Encoder agent (writes files, fixes errors)
+3. **Review** → 4 Reviewer agents in parallel (RAC, Formula, Param, Integration)
+4. **Validation** → Encoding Validator agent (PE/TAXSIM comparison)
+5. **Logging** → Records to autorac experiment DB
+6. **Report** → Calibration comparison (predicted vs actual)
+
+## Invoke
 
 ```
 Task(
-  subagent_type="cosilico:RAC Encoder",
-  prompt="Encode $ARGUMENTS into RAC format. Output to rac-us/statute/{path}.rac
-         Run CI validation after writing. If it fails, fix and retry (max 3 iterations).
-         Track each iteration: attempt number, errors encountered, fixes applied.",
+  subagent_type="cosilico:Encoding Orchestrator",
+  prompt="Encode $ARGUMENTS",
   model="opus"
 )
 ```
-
-### Step 2: Validate with autorac
-
-After agent completes, run validation:
-
-```bash
-cd ~/CosilicoAI/autorac && source .venv/bin/activate
-autorac validate ~/CosilicoAI/rac-us/statute/{path}.rac --json
-```
-
-### Step 3: Log to Experiment DB
-
-Record the journey:
-
-```bash
-autorac log \
-  --citation="$ARGUMENTS" \
-  --file=~/CosilicoAI/rac-us/statute/{path}.rac \
-  --iterations=N \
-  --errors='[{"type":"parse","message":"..."},{"type":"test","message":"..."}]' \
-  --duration=TOTAL_MS \
-  --scores='{"rac":X,"formula":X,"param":X,"integration":X}' \
-  --db=./experiments.db
-```
-
-Error types: `parse`, `test`, `import`, `style`, `other`
-
-### Step 4: Report Results
-
-```
-Results for $ARGUMENTS:
-  File: rac-us/statute/{path}.rac
-  Iterations: N (1 = first-try success)
-  Errors: [list any errors encountered]
-  Duration: X seconds
-  Scores:
-    - RAC Format: X/10
-    - Formula: X/10
-    - Parameters: X/10
-    - Integration: X/10
-```
-
-### Step 5: View Statistics
-
-Check for patterns:
-
-```bash
-autorac stats --db=./experiments.db
-```
-
-## Output Location
-
-```
-rac-us/statute/{title}/{section}.rac
-
-Examples:
-- 26 USC 32      → rac-us/statute/26/32.rac
-- 26 USC 32(c)   → rac-us/statute/26/32/c.rac
-- 7 USC 2017(a)  → rac-us/statute/7/2017/a.rac
-```
-
-## Key Rules
-
-1. **No magic numbers**: Only -1, 0, 1, 2, 3 allowed as literals
-2. **Citation traceability**: Every variable references its statute section
-3. **Parameterize everything**: Dollar amounts, rates, thresholds as parameters
-4. **Inline tests**: Every variable has test cases
-5. **Import syntax**: `imports: [path#variable]` for cross-file dependencies
