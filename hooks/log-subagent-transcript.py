@@ -93,10 +93,21 @@ def log_to_local_db(data: dict) -> bool:
 
 
 def main():
+    # DEBUG: Log that hook was called
+    debug_file = Path.home() / "CosilicoAI" / "autorac" / "hook_debug.log"
+    with open(debug_file, "a") as f:
+        f.write(f"\n=== Hook called at {datetime.utcnow().isoformat()} ===\n")
+
     # Read hook input from stdin
     try:
-        hook_input = json.load(sys.stdin)
-    except json.JSONDecodeError:
+        raw_input = sys.stdin.read()
+        with open(debug_file, "a") as f:
+            f.write(f"Raw input length: {len(raw_input)}\n")
+            f.write(f"Raw input preview: {raw_input[:1000]}\n")
+        hook_input = json.loads(raw_input) if raw_input else {}
+    except json.JSONDecodeError as e:
+        with open(debug_file, "a") as f:
+            f.write(f"JSON decode error: {e}\n")
         sys.exit(0)  # No input, exit silently
 
     # Extract relevant fields
