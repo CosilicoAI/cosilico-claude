@@ -81,24 +81,31 @@ autorac log \
   --file=/Users/maxghenis/CosilicoAI/rac-us/statute/{path}.rac \
   --iterations={N} \
   --errors='[{errors}]' \
-  --scores='{"rac":{X},"formula":{X},"param":{X},"integration":{X}}' \
-  --predicted='{"iterations":{P},"rac":{P},"formula":{P},"param":{P},"integration":{P}}'
+  --oracle='{"pe_match":{X},"taxsim_match":{Y}}' \
+  --discrepancies='{N}'
 ```
 
 Then output the calibration report:
 
 ```
 Results for {citation}:
-                    Predicted    Actual
-Iterations:         {P}          {A}
-Errors:             [...]        [...]
-RAC Format:         {P}/10       {A}/10
-Formula:            {P}/10       {A}/10
-Parameters:         {P}/10       {A}/10
-Integration:        {P}/10       {A}/10
 
-Calibration: [good | overconfident | underconfident]
+Oracle Match Rates:
+- PolicyEngine: {X}%
+- TAXSIM: {Y}%
+
+Iterations: {actual}
+Errors encountered: {list}
+
+Reviewer Diagnoses:
+- Formula: {root causes found}
+- Parameters: {issues traced to statute}
+- Integration: {import/file issues}
+
+Discrepancies Explained: {N}/{total} oracle mismatches have identified root causes
 ```
+
+**NO SUBJECTIVE SCORES.** The oracle match rate IS the score. Reviewers diagnose discrepancies, they don't rate.
 
 ## Critical Rules
 
