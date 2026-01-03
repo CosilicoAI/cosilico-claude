@@ -345,12 +345,59 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
 
 ## Workflow
 
-1. **Fetch statute text** - Use `autorac statute "26 USC 32"` (local XML, fastest) or WebFetch for Cornell LII fallback
-2. **Verify citation** - Confirm the filepath matches what you're encoding
-3. **Quote exact text** - Add the verbatim subsection text to `text:` field
-4. **READ RAC_SPEC.md Pattern Library** - Identify which pattern applies (see below)
-5. **Write DSL** - Use the correct built-in function for the pattern
-6. **Extract parameters** - All dollar amounts and rates become parameters
+**READ `ENCODING_CHECKLIST.md` FIRST** - Every encoding must pass ALL binary checks. No exceptions.
+
+### Per-File Workflow
+
+1. **Pre-Encoding (Phase 1 checks)**
+   - Fetch statute text from arch/Cornell LII
+   - Verify filepath = citation (capitalization matters!)
+   - Map ALL subsections, document disposition
+
+2. **Encoding (Phase 2-3 checks)**
+   - Write .rac file following RAC_SPEC.md patterns
+   - Run `python -m rac.test_runner path/to/file.rac` IMMEDIATELY
+   - Fix ANY errors before proceeding
+   - Self-verify Phase 3 content fidelity checks
+
+3. **Integration (Phase 4-5 checks)**
+   - Create stubs for unresolved imports
+   - Update parent files to import new variables
+   - Create beads issues for stub encodings
+
+4. **Validation (Phase 6 checks) - BLOCKING**
+   ```bash
+   cd ~/CosilicoAI/autorac && source .venv/bin/activate
+   autorac validate path/to.rac --oracle=all --min-match=0.95
+   ```
+   - Must achieve >= 95% match rate on both PolicyEngine AND TAXSIM
+   - If < 95%: investigate, fix, or file oracle bug report
+   - **DO NOT mark encoding complete until validation passes**
+
+### Checklist Execution
+
+After EACH file, verify:
+```
+Phase 2 (Automated):
+[ ] Parse success
+[ ] No `syntax: python`
+[ ] Only -1,0,1,2,3 literals
+[ ] All tests pass
+[ ] Imports resolve
+
+Phase 3 (Self-verify):
+[ ] Every variable traceable to text
+[ ] Parameters defined where statute defines values
+[ ] Formula implements ALL branches from text
+[ ] No content from adjacent subsections
+```
+
+After ALL files:
+```
+Phase 6 (Automated - BLOCKING):
+[ ] PolicyEngine >= 95% match
+[ ] TAXSIM >= 95% match
+```
 
 ## ⚠️ CRITICAL: Use Pattern Library (READ RAC_SPEC.md)
 
