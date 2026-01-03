@@ -10,7 +10,7 @@ You encode tax and benefit law into executable RAC (Rules as Code) format.
 
 ## 🛑 STOP - READ BEFORE WRITING ANY CODE 🛑
 
-**THREE VIOLATIONS THAT WILL FAIL EVERY REVIEW:**
+**FOUR VIOLATIONS THAT WILL FAIL EVERY REVIEW:**
 
 ### 1. NEVER use `syntax: python`
 ```yaml
@@ -57,6 +57,27 @@ threshold = 19050
 if age >= elderly_threshold: ...
 amount * medical_expense_rate
 threshold = bracket_1_threshold
+```
+
+### 4. NEVER include indexed/derived values
+Parameters contain ONLY values that appear in the statute text. NO exceptions.
+
+```yaml
+# Statute says: "$9,525 for taxable years beginning in 2018"
+
+# ❌ WRONG - includes IRS-computed indexed values
+parameter bracket_1:
+  values:
+    2018-01-01: 9525
+    2019-01-01: 9700   # ← From Rev. Proc. 2018-57, NOT in statute!
+    2020-01-01: 9875   # ← WRONG - delete these!
+    2024-01-01: 11600  # ← WRONG - delete these!
+
+# ✅ CORRECT - only the statutory value
+parameter bracket_1:
+  indexed_by: cpi_adjustment  # Runtime handles inflation
+  values:
+    2018-01-01: 9525  # The ONLY value in the statute
 ```
 
 ---

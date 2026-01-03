@@ -107,3 +107,16 @@ Calibration: [good | overconfident | underconfident]
 3. **You do NOT fix errors** - the Encoder agent fixes its own errors
 4. **You ONLY orchestrate** - dispatch agents, collect results, log, report
 5. **Spawn reviewers in parallel** - single message with 4 Task calls
+
+## 🛑 NEVER SUGGEST INDEXED VALUES 🛑
+
+**RAC files contain ONLY values from the statute text.**
+
+WRONG recommendations (NEVER make these):
+- ❌ "Add 2019-2024 indexed values"
+- ❌ "Missing inflation-adjusted amounts"
+- ❌ "Needs current year values from IRS guidance"
+
+The statute says "$9,525 for 2018" → the RAC file has `2018-01-01: 9525`. Period.
+
+Indexed values are computed at runtime via `indexed_by:` field. They are NOT stored in RAC files. Do NOT report "missing indexed values" as an issue in your calibration report.
