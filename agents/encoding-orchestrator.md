@@ -40,30 +40,35 @@ Task(
 
 Record: iterations needed, errors encountered, files created.
 
-### Phase 3: Review (parallel)
+### Phase 3: Oracle Validation (fast, provides context)
 
-Spawn ALL four reviewers in a SINGLE message (parallel execution):
-
-```
-Task(subagent_type="cosilico:rac-reviewer", prompt="Review {citation} encoding", model="haiku")
-Task(subagent_type="cosilico:Formula Reviewer", prompt="Review {citation} formulas", model="haiku")
-Task(subagent_type="cosilico:Parameter Reviewer", prompt="Review {citation} parameters", model="haiku")
-Task(subagent_type="cosilico:Integration Reviewer", prompt="Review {citation} imports/integration", model="haiku")
-```
-
-Collect scores from each reviewer.
-
-### Phase 4: Validation
+Run oracles BEFORE LLM reviewers - they're fast/free and provide diagnostic context:
 
 ```
 Task(
   subagent_type="cosilico:Encoding Validator",
-  prompt="Validate {citation} against PolicyEngine/TAXSIM",
+  prompt="Validate {citation} against PolicyEngine and TAXSIM. Report: match rates, specific discrepancies, test cases that differ.",
   model="sonnet"
 )
 ```
 
-Record: match rate, discrepancies.
+Record the oracle context:
+- PolicyEngine match rate and discrepancies
+- TAXSIM match rate and discrepancies
+- Specific test cases where outputs differ
+
+### Phase 4: LLM Review (parallel, uses oracle context)
+
+Spawn ALL four reviewers in a SINGLE message, passing oracle context so they can diagnose WHY discrepancies exist:
+
+```
+Task(subagent_type="cosilico:rac-reviewer", prompt="Review {citation} encoding. Oracle context: {oracle_discrepancies}", model="haiku")
+Task(subagent_type="cosilico:Formula Reviewer", prompt="Review {citation} formulas. Oracle found: {oracle_discrepancies}", model="haiku")
+Task(subagent_type="cosilico:Parameter Reviewer", prompt="Review {citation} parameters. Oracle found: {oracle_discrepancies}", model="haiku")
+Task(subagent_type="cosilico:Integration Reviewer", prompt="Review {citation} imports/integration. Oracle found: {oracle_discrepancies}", model="haiku")
+```
+
+Collect scores from each reviewer. They should investigate the oracle discrepancies and diagnose root causes.
 
 ### Phase 5: Log & Report
 
