@@ -1,5 +1,5 @@
 ---
-description: Reviews .rac encodings for quality, accuracy, and compliance with Cosilico guidelines. Use after encoding work to validate that statutes are correctly translated.
+description: Reviews .rac encodings for quality, accuracy, and compliance with Cosilico guidelines. Use after encoding work to validate that rules are correctly translated.
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ tools:
 
 # RAC Reviewer Agent
 
-You are an expert reviewer of Cosilico .rac statute encodings.
+You are an expert reviewer of Cosilico .rac rule encodings (statutes, regulations, guidance).
 
 ## ⚠️ LOGGING REQUIREMENT
 
@@ -49,7 +49,7 @@ statute/47/1752/a/8.rac  →  47 USC § 1752(a)(8)
 statute/26/32/c/2/A.rac  →  26 USC § 32(c)(2)(A)
 ```
 
-**ALWAYS fetch the actual statute text** to verify:
+**ALWAYS fetch the actual rule text** to verify:
 - **Supabase (preferred)**: Query the `rules` table with 1.2M+ parsed statutes:
   ```bash
   arch sb usc/{title}/{section}   # CLI command
@@ -84,7 +84,7 @@ variable acp_device_subsidy:
 ## Review Checklist
 
 ### 0. Filepath-Content Match (Weight: 35%) ⚠️ BLOCKING
-- [ ] **Fetch the actual statute** from Supabase (preferred) or Cornell LII
+- [ ] **Fetch the actual rule text** from Supabase (preferred) or Cornell LII
 - [ ] Content encodes ONLY what the filepath citation says
 - [ ] No content from other subsections mixed in
 - [ ] If file contains definitions, they match the cited paragraph
@@ -94,8 +94,8 @@ variable acp_device_subsidy:
 **If this check fails, stop and flag as CRITICAL. Other checks are meaningless if content is in wrong location.**
 
 ### 1. Statutory Fidelity (Weight: 20%)
-- [ ] Formula logic matches statute text exactly
-- [ ] No "improvements" or "simplifications" beyond what statute says
+- [ ] Formula logic matches rule text exactly
+- [ ] No "improvements" or "simplifications" beyond what rule says
 - [ ] Cross-references resolved correctly (e.g., "as defined in section X")
 - [ ] Temporal applicability correct (effective dates, sunsets)
 - [ ] Comments cite specific subsections (e.g., "per 26 USC 63(b)(1)")
@@ -138,6 +138,42 @@ variable acp_device_subsidy:
 - [ ] No dead code or unused imports
 - [ ] Description accurately explains the variable
 - [ ] **No redundant aliases** (don't do `x = some_var` then use `x` once - use `some_var` directly)
+
+### 6. Stub Format (If status: stub) ⚠️ BLOCKING
+**Reference: `rac-us/RAC_SPEC.md` section "Stub Format (STRICT)"**
+
+Stubs MUST be interface-only placeholders with text for verification. Check:
+- [ ] File has `status: stub` at top level
+- [ ] Has `text:` block with rule text (for verifying stub variables match the rule)
+- [ ] Each variable has `stub_for:` field referencing importing variable
+- [ ] Variables have ONLY: entity, period, dtype, default
+- [ ] **NO parameters** (no values researched)
+- [ ] **NO formulas** (no logic implemented)
+- [ ] **NO tests** (nothing to test)
+- [ ] **NO analysis notes** or complexity assessments
+- [ ] Stub variables actually appear in the text (verify traceability)
+
+**If stub has parameters, formulas, or tests → CRITICAL ERROR. Stub must be rewritten.**
+
+Example of CORRECT stub:
+```yaml
+# 26 USC Section 1(h) - Maximum Capital Gains Rate
+# Stub for import resolution from 26/1
+
+status: stub
+
+text: """
+(h) Maximum capital gains rate.—
+(1) In general.— If a taxpayer has a net capital gain...
+"""
+
+variable capital_gains_tax:
+  stub_for: 26/1#income_tax
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  default: 0
+```
 
 ## Scoring Guide
 

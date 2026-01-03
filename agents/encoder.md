@@ -78,8 +78,7 @@ Read statute text and produce correct DSL encodings. You do NOT write tests or v
 Every .rac file gets a status. Files without explicit `status:` are assumed `encoded`.
 
 ```yaml
-status: encoded | partial | draft | consolidated | deferred | boilerplate | entity_not_supported | obsolete
-notes: "optional context"
+status: encoded | partial | draft | consolidated | stub | deferred | boilerplate | entity_not_supported | obsolete
 ```
 
 | Status | Meaning | Has formula? |
@@ -88,7 +87,8 @@ notes: "optional context"
 | `partial` | Some provisions in text encoded, others pending | Yes (incomplete) |
 | `draft` | Work in progress | Partial |
 | `consolidated` | Captured in parent/sibling file | No |
-| `deferred` | Too complex, return later | No |
+| `stub` | Interface only - created so imports resolve, no analysis done | No |
+| `deferred` | Reviewed but intentionally skipped for now | No |
 | `boilerplate` | Definitions, cross-refs, no computational content | No |
 | `entity_not_supported` | Needs entity type not yet modeled (corps, trusts) | No |
 | `obsolete` | Historical provision no longer in effect | No |
@@ -96,11 +96,17 @@ notes: "optional context"
 **Every subsection gets a .rac file** - even if skipped. This makes the repo self-documenting:
 
 ```yaml
-# 26 USC 1(g) - Kiddie Tax
-status: deferred
-notes: "Parent-child income linkage needed"
-text: """(g) Certain unearned income of children taxed as if parent's income..."""
+# 26 USC 1(g) - Kiddie Tax (stub created because 26/1 imports it)
+status: stub
+
+variable kiddie_tax:
+  stub_for: 26/1#income_tax
+  entity: TaxUnit
+  period: Year
+  dtype: Money
 ```
+
+The `stub_for` field documents which variable caused this stub to be created. Remove it when encoding.
 
 ## ⚠️ CRITICAL: Leaf-First Encoding with Structure Discovery
 
@@ -653,25 +659,103 @@ variable income_tax_before_credits:
 - [ ] Parent .rac file imports key variables from new subdirectory
 - [ ] Parent file's formula uses the imported variables
 
-### 3. Import Resolution
-Every import MUST resolve to an existing definition:
+### 3. Import Resolution & Stubs
+
+Every import MUST resolve to an existing file. If the file doesn't exist, **create a stub** at that location.
+
+**⚠️ READ `rac-us/RAC_SPEC.md` section "Stub Format (STRICT)" before creating any stub.**
+
+#### When You Need to Import from a Non-Existent File
+
+You're encoding `26/1.rac` and need `capital_gains_tax` from `26/1/h`. That file doesn't exist.
+
+**Create a stub at the source location:**
 
 ```yaml
-# ❌ WRONG - net_capital_gain not defined anywhere
-imports:
-  - 26/1222#net_capital_gain
+# 26 USC Section 1(h) - Maximum Capital Gains Rate
+# Stub for import resolution from 26/1
 
-# ✓ RIGHT - either create the definition OR use an input
-input net_capital_gain:
+status: stub
+
+text: """
+(h) Maximum capital gains rate.—
+(1) In general.— If a taxpayer has a net capital gain...
+"""
+
+variable capital_gains_tax:
+  stub_for: 26/1#income_tax
   entity: TaxUnit
   period: Year
   dtype: Money
-  description: "Net capital gain per § 1222(11)"
+  default: 0
+```
+
+**⚠️ STUBS CONTAIN:**
+- `status: stub`
+- `text:` block with rule text (for reviewer verification)
+- Variable declarations with `stub_for:`, entity, period, dtype, default
+
+**⚠️ STUBS DO NOT CONTAIN:**
+- ❌ Parameters (no values researched)
+- ❌ Formulas (no logic implemented)
+- ❌ Tests (nothing to test)
+- ❌ Analysis notes or complexity assessments
+
+Then create a beads issue: `bd create --title="Encode 26/1/h" --type=task`
+
+**Your importing file stays clean:**
+```yaml
+# 26/1.rac - just imports normally
+variable income_tax:
+  imports:
+    - 26/1/h#capital_gains_tax
+```
+
+#### When You're Assigned to Encode a Stub
+
+If you're tasked with encoding `26/1/h` and find this:
+
+```yaml
+# 26/1/h.rac - existing stub
+status: stub
+
+variable capital_gains_tax:
+  stub_for: 26/1#income_tax
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+```
+
+**Replace the entire file with the real implementation.** The stub was just a placeholder. Now you:
+1. Fetch the actual statute text for 26 USC 1(h)
+2. Encode it properly following all the rules
+3. The variable interface (entity, period, dtype) should match what was declared
+4. **Remove the `stub_for` field** - it's no longer a stub
+
+```yaml
+# 26/1/h.rac - REAL IMPLEMENTATION (replaces stub)
+text: """(h) Maximum capital gains rate..."""
+
+parameter preferential_rate:
+  values:
+    2024-01-01: 0.15
+
+variable capital_gains_tax:
+  entity: TaxUnit
+  period: Year
+  dtype: Money
+  formula: |
+    return adjusted_net_capital_gain * preferential_rate
+  tests:
+    - name: "Basic cap gains"
+      inputs: { adjusted_net_capital_gain: 10000 }
+      expect: 1500
 ```
 
 **Checklist:**
-- [ ] Every `path#variable` import has a corresponding definition
-- [ ] If definition doesn't exist, create stub file OR use input declaration
+- [ ] Every `path#variable` import has a corresponding file
+- [ ] Non-existent imports → create stub at source location + beads issue
+- [ ] When encoding a stub → replace entirely, remove `stub_for`
 
 ### 4. Circular Reference Check
 Variables cannot reference themselves or create cycles:
