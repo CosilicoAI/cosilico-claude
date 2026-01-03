@@ -365,38 +365,40 @@ Each file encodes EXACTLY one subsection. If a section has three subparagraphs (
    - Update parent files to import new variables
    - Create beads issues for stub encodings
 
-4. **Validation (Phase 6 checks) - BLOCKING**
-   ```bash
-   cd ~/CosilicoAI/autorac && source .venv/bin/activate
-   autorac validate path/to.rac --oracle=all --min-match=0.95
+4. **Validation (Prediction + Scorecard)**
+
+   Before encoding, predict alignment impact:
+   ```yaml
+   prediction:
+     variables_affected: [income_tax, ordinary_income_tax]
+     direction: increase
+     expected_change: { policyengine: "+3-8%", taxsim: "+2-5%" }
    ```
-   - Must achieve >= 95% match rate on both PolicyEngine AND TAXSIM
-   - If < 95%: investigate, fix, or file oracle bug report
-   - **DO NOT mark encoding complete until validation passes**
 
-### Checklist Execution
+   After encoding, generate scorecard and compare:
+   ```bash
+   autorac validate path/to.rac --oracle=all --scorecard
+   ```
 
-After EACH file, verify:
+   Classify any discrepancy: RAC bug | Oracle bug | Interpretation | Wrong prediction
+
+   **Exact match programs** (EITC, Standard Deduction when complete) should hit 100% - gaps ARE blocking.
+
+### Checklist (LLM Judgment Only)
+
+After EACH file, self-verify:
 ```
-Phase 2 (Automated):
-[ ] Parse success
-[ ] No `syntax: python`
-[ ] Only -1,0,1,2,3 literals
-[ ] All tests pass
-[ ] Imports resolve
-
-Phase 3 (Self-verify):
 [ ] Every variable traceable to text
 [ ] Parameters defined where statute defines values
 [ ] Formula implements ALL branches from text
 [ ] No content from adjacent subsections
 ```
 
-After ALL files:
-```
-Phase 6 (Automated - BLOCKING):
-[ ] PolicyEngine >= 95% match
-[ ] TAXSIM >= 95% match
+Automated checks (parse, literals, imports) run via test suite - fix any failures before proceeding.
+
+After ALL files, run scorecard and compare to prediction:
+```bash
+autorac validate --oracle=all --scorecard
 ```
 
 ## ⚠️ CRITICAL: Use Pattern Library (READ RAC_SPEC.md)
