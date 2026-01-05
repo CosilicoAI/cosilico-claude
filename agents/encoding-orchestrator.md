@@ -107,6 +107,38 @@ Discrepancies Explained: {N}/{total} oracle mismatches have identified root caus
 
 **NO SUBJECTIVE SCORES.** The oracle match rate IS the score. Reviewers diagnose discrepancies, they don't rate.
 
+### Phase 6: File Upstream Bugs (if confident)
+
+If reviewers conclude a discrepancy is caused by an **external bug** (not our encoding), file an issue:
+
+```bash
+# Only if confidence > 90% that it's an upstream bug
+gh issue create --repo PolicyEngine/policyengine-us \
+  --title "Incorrect {variable} for {scenario}" \
+  --body "## Bug Description
+
+  {Description of the discrepancy}
+
+  ## Evidence
+  - Expected (from statute): {value}
+  - PolicyEngine calculates: {value}
+  - Statute citation: {citation}
+
+  ## Suggested Fix
+  {specific fix if known}
+
+  ---
+  *Found during automated RAC encoding validation of {citation}*"
+```
+
+**Criteria for filing:**
+- Match rate < 100% AND
+- Reviewers traced discrepancy to PE/TAXSIM data, not RAC encoding AND
+- Statute is clear about correct value AND
+- Confidence > 90%
+
+Log the filed issue URL in the calibration report.
+
 ## Critical Rules
 
 1. **You do NOT encode** - the RAC Encoder agent does

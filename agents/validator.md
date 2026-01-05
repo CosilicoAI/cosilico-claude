@@ -73,12 +73,32 @@ eitc = sim.calculate("eitc", 2024)
 print(f"PolicyEngine EITC: ${eitc[0]:,.0f}")
 ```
 
-### Against TAXSIM
+### Against Precomputed Oracles (Preferred)
 
-```bash
-# Submit to TAXSIM 35 API
-curl -X POST https://taxsim.nber.org/taxsim35/taxsim.cgi \
-  -d "year=2024&mstat=1&pwages=20000&depx=1"
+Oracle data is precomputed for the full CPS. Query it instead of running ad-hoc simulations:
+
+```python
+import pandas as pd
+
+# Load precomputed oracle values
+pe_oracle = pd.read_parquet("rac-validators/oracles/pe_cps_2024.parquet")
+taxsim_oracle = pd.read_parquet("rac-validators/oracles/taxsim_cps_2024.parquet")
+
+# Query for a specific variable
+pe_eitc = pe_oracle.query("household_id == 12345")["eitc"].iloc[0]
+taxsim_eitc = taxsim_oracle.query("household_id == 12345")["fiitax"].iloc[0]
+```
+
+**DO NOT run ad-hoc PE/TAXSIM API calls during encoding.** Use precomputed data.
+
+### Against TAXSIM (Fallback if oracle not available)
+
+TAXSIM requires the local executable, not the web API:
+
+```python
+from policyengine_us.tools.taxsim import TaxSim35
+taxsim = TaxSim35()
+# See policyengine_us/tools/taxsim/generate_taxsim_tests.py
 ```
 
 ## Discrepancy Analysis
