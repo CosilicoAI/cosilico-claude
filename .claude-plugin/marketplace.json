@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cosilico",
   "owner": {
-    "name": "Cosilico"
+    "name": "Rules Foundation"
   },
   "plugins": [
     {

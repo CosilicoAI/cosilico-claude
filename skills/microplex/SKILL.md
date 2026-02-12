@@ -200,7 +200,7 @@ synth = Synthesizer(
 ## Key Repository
 
 ```
-~/CosilicoAI/micro/
+~/RulesFoundation/micro/
 ├── src/microplex/
 │   ├── synthesizer.py   # Main Synthesizer class
 │   ├── evaluator.py     # Quality metrics

@@ -1,6 +1,6 @@
-# Cosilico Design System
+# Rules Foundation Design System
 
-Use this skill when creating or modifying frontend components for cosilico.ai. This ensures consistent styling using our vanilla-extract based design system.
+Use this skill when creating or modifying frontend components for rules.foundation. This ensures consistent styling using our vanilla-extract based design system.
 
 ## CRITICAL Requirements
 
@@ -29,7 +29,7 @@ import * as styles from '../styles/myComponent.css';
 
 ### 2. Always Include Grid Background
 
-**Every page MUST have the grid background.** This is a core Cosilico brand element:
+**Every page MUST have the grid background.** This is a core Rules Foundation brand element:
 
 ```tsx
 import * as styles from '../styles/myComponent.css';
