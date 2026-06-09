@@ -1,6 +1,6 @@
 {
   "name": "cosilico",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Cosilico: synthetic microdata (microplex) and microsimulation tools",
   "author": {
     "name": "Cosilico"

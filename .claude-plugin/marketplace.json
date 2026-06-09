@@ -9,7 +9,7 @@
       "name": "cosilico",
       "source": "./",
       "description": "Encode tax and benefit law into executable DSL with multi-system validation",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

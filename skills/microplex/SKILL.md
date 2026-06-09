@@ -1,219 +1,86 @@
 ---
 name: Microplex Synthetic Data
-description: Use this skill when evaluating synthetic microdata quality, training synthesizers, or interpreting quality metrics. Covers authenticity vs privacy metrics.
-version: 1.0.0
+description: Use this skill when working on microplex, synthetic microdata quality, the eCPS replacement, or interpreting synthesis/calibration benchmark metrics. Covers the spec-driven architecture, repo map, evaluation protocol, and weighting guards.
+version: 2.0.0
 ---
 
-# Microplex Synthetic Data Quality
+# Microplex: spec-driven microdata synthesis
 
-This skill provides patterns and guidance for generating and evaluating synthetic survey microdata.
+Microplex is PolicyEngine's pipeline for building calibrated survey microdata,
+on track to replace the Enhanced CPS (eCPS) as the canonical US dataset.
+Architecture: a **pure declarative country pack** (YAML/JSON) executed by a
+**generic engine**, with imputation, calibration, and entity construction
+factored into sibling packages.
 
-## Core Concept: Authenticity vs Privacy
+## Repo map (github.com/PolicyEngine, local clones in ~/CosilicoAI/)
 
-**CRITICAL DISTINCTION:**
+| Repo | Role |
+|---|---|
+| `microplex` | The engine: spec loader, spine builder, imputation runner, transforms, Arch targets, calibration, eval |
+| `microplex-us` | US content pack — YAML/JSON **only** (`src/microplex_us/specs/us-2024.yaml` + manifests). Zero Python by contract (AGENTS.md) |
+| `microimpute` | Canonical regime-aware donor imputation (QRF) |
+| `microcalibrate` | Identity-preserving gradient-descent calibration |
+| `microunit` | Tax-unit/SPM/program unit construction (extracted byte-identically from eCPS) |
+| `microplex-evals` | Frozen benchmark science — paper claims cite `artifacts/`, never console output |
+| `policyengine-us-data` | The incumbent eCPS being replaced |
 
-| Metric Type | What It Measures | Good Value Means |
-|-------------|------------------|------------------|
-| **Authenticity** | Synthetic → Holdout resemblance | **HIGH is GOOD** - realistic records |
-| **Privacy** | Synthetic → Training resemblance | **LOW is GOOD** - no memorization |
+Targets come from **Arch** consumer-fact records via
+`microplex.targets.arch_provider` plus the pack's `manifests/arch_targets.json`.
 
-### Why Holdout Resemblance is GOOD
+⚠️ **Branch gotcha:** the engine's de facto trunk has been the integration
+branch `claude/spec-driven-engine`; `main` lagged far behind. Always
+`git fetch` and check both before reading or citing engine code. The US spec
+also exists in two copies (`microplex/packs/us/` and `microplex-us`) — check
+which is ahead before editing either.
 
-Synthetic records SHOULD resemble holdout (test) records because:
-- Both represent the same underlying population
-- High resemblance = the model learned the true distribution
-- Holdout records were never seen during training
+## The pipeline (`microplex.run.run_spec`)
 
-**Privacy risk is only from resembling TRAINING records**, which would indicate memorization.
+spec (YAML) → sources → base imputation → **support spine** (seeded 50/50:
+`cps_keep` passthrough half + `synthetic_puf` half stripped to demographics) →
+halves imputation (microimpute) → declarative transforms → optional
+PolicyEngine runtime ops (variable materialization, takeup rerandomization) →
+Arch targets → sparse calibration → export. Check `PENDING_STAGES` in
+`microplex/src/microplex/run.py` for stages not yet wired.
 
-## Quality Metrics
+**Correctness anchor** (`docs/spec-driven-rebuild.md` §4): the synthetic half
+must NEVER keep or condition on CPS wages — it carries the PUF's income tail.
 
-### 1. Authenticity Metrics (Higher = Better)
+## Evaluation: what actually exists
 
-```python
-from microplex import Evaluator
+- `microplex.eval` — generic synthesis benchmarks: PRDC
+  (precision/recall/density/coverage, via the `prdc` package), aggregate
+  error, and method comparisons (QRF / ZI-QRF / QDNN / MAF).
+- **eCPS-replacement protocol**: matched-N, symmetric-refit, **holdout**
+  comparison on the same target surface; unweighted MSRE + per-target holdout
+  wins. Frozen baseline:
+  `microplex-us` `manifests/frozen_production_ecps_2024_benchmark_manifest.json`.
+  The 2,223-line comparison harness was deleted in microplex-us#261 — recover
+  from `microplex-us@f3af332` until it lands in `microplex.eval`
+  (microplex-us#231, microplex-evals#1).
+- **Authenticity vs privacy** (conceptual guardrail): synthetic records
+  *should* resemble **holdout** data (the model learned the distribution);
+  they should *not* resemble **training** data more closely (memorization).
+  Public CPS donors carry no privacy risk; administrative donors do.
 
-evaluator = Evaluator(real_train, real_holdout, synthetic)
+## Critical guards
 
-# How well do synthetic records match the holdout distribution?
-# Authenticity = mean NN distance from synthetic to holdout
-# Range: 0-1, higher is better (1 = perfect replication)
-authenticity = evaluator.authenticity()  # Target: >0.85
-```
+1. **Entity-convergence guard (microplex-us#113):** `microunit` IS eCPS's
+   tax-unit engine, so adopting it makes MP's entities converge toward
+   eCPS's. A loss drop after adoption is convergence, NOT improvement. Never
+   report "MP beats eCPS" off shared construction code — isolate the effect
+   with a matched-N, symmetric-refit, holdout before/after run.
+2. **Aggregates:** never sum weight arrays or count raw records. Use
+   `Microsimulation.calculate(var, year)` with microdf auto-weighting; the
+   only weight ever referenced directly is `household_weight`
+   (microplex-us#224).
+3. **Donor-fit weighting (microplex-us#263):** the engine defaults donor fits
+   to UNWEIGHTED even when the donor has survey weights
+   (`ImputationStep.weights` is opt-in). For outcome-stratified donors like
+   the PUF this is the eCPS "landmine" bug class (extreme low-weight donors
+   broadcast as point masses, detonating under reweighting). Check #263's
+   resolution before training on PUF or scoring candidates.
 
-### 2. Coverage Metrics (Higher = Better)
+## Version floors
 
-```python
-# What fraction of holdout space is covered by synthetic?
-# Coverage = fraction of holdout records with a close synthetic neighbor
-# Range: 0-1, higher is better
-coverage = evaluator.coverage()  # Target: >0.90
-```
-
-### 3. Privacy Metrics (Higher = Better)
-
-```python
-# Privacy ratio = (train distance) / (holdout distance)
-# >1 means synthetic is closer to holdout than training (GOOD)
-# <1 means synthetic resembles training too much (BAD - memorization)
-privacy_ratio = evaluator.privacy_ratio()  # Target: >1.0
-
-# Distance to closest training record
-# Higher = more privacy protection
-train_distance = evaluator.nearest_neighbor_distance(to="training")
-```
-
-### 4. Correlation Preservation (Lower Error = Better)
-
-```python
-# dCor preservation error
-# How well does synthetic preserve variable dependencies?
-# Range: 0-1, lower is better (0 = perfect preservation)
-dcor_error = evaluator.dcor_preservation_error()  # Target: <0.10
-```
-
-### 5. Variance Ratio (Closer to 1 = Better)
-
-```python
-# Variance ratio = var(synthetic) / var(real)
-# 1.0 = perfect variance match
-# <1 = under-dispersed (too narrow)
-# >1 = over-dispersed (too wide)
-for var in ['income', 'age']:
-    ratio = synthetic[var].var() / real[var].var()
-    print(f"{var}: {ratio:.3f}")  # Target: 0.8-1.2
-```
-
-## Interpretation Guide
-
-### Good Metrics (Realistic + Private)
-```
-Authenticity:     0.92  ✓ (synthetic resembles holdout - GOOD!)
-Coverage:         0.88  ✓ (covers most of holdout space)
-Privacy Ratio:    1.15  ✓ (farther from training than holdout)
-dCor Error:       0.08  ✓ (correlations preserved)
-Income Var Ratio: 0.95  ✓ (variance preserved)
-```
-
-### Bad Metrics (Memorization Risk)
-```
-Authenticity:     0.65  ✗ (synthetic doesn't match holdout)
-Coverage:         0.45  ✗ (missing parts of the distribution)
-Privacy Ratio:    0.72  ✗ (closer to training - MEMORIZATION!)
-dCor Error:       0.35  ✗ (correlations not preserved)
-Income Var Ratio: 0.42  ✗ (under-dispersed)
-```
-
-## Training Guidelines
-
-### Variance Regularization
-
-```python
-from microplex import Synthesizer
-
-synth = Synthesizer(
-    target_vars=['income', 'age'],
-    condition_vars=['education'],
-    variance_regularization=0.1,  # Penalize under-dispersion
-    sample_clipping=3.0,          # Clip extreme samples
-)
-```
-
-### Privacy-Aware Training
-
-```python
-# Hold out data for evaluation
-from sklearn.model_selection import train_test_split
-
-train, holdout = train_test_split(data, test_size=0.2, random_state=42)
-
-# Train only on training data
-synth.fit(train, epochs=100, batch_size=256)
-
-# Evaluate using BOTH train and holdout
-evaluator = Evaluator(train, holdout, synthetic)
-```
-
-## Data Sources
-
-### CPS (Current Population Survey)
-- **Privacy Risk**: NONE (public data)
-- **Holdout Resemblance**: Entirely acceptable
-- **Use Case**: Baseline testing, public distribution
-
-### Administrative Data (IRS, SSA)
-- **Privacy Risk**: HIGH
-- **Holdout Resemblance**: Still acceptable (holdout wasn't trained on)
-- **Training Resemblance**: MUST be low
-- **Use Case**: Research access only
-
-## Quality Thresholds
-
-| Metric | Minimum | Target | Excellent |
-|--------|---------|--------|-----------|
-| Authenticity | 0.70 | 0.85 | 0.95 |
-| Coverage | 0.75 | 0.90 | 0.98 |
-| Privacy Ratio | 1.0 | 1.2 | 1.5 |
-| dCor Error | 0.20 | 0.10 | 0.05 |
-| Variance Ratio | 0.7-1.3 | 0.85-1.15 | 0.95-1.05 |
-
-## Common Issues
-
-### Under-dispersion (Variance Ratio < 0.7)
-```python
-# Fix: Add variance regularization
-synth = Synthesizer(variance_regularization=0.2)
-
-# Or: Use hierarchical generation
-synth = Synthesizer(
-    hierarchy=['household', 'person'],
-    variance_regularization=0.1,
-)
-```
-
-### Low Coverage
-```python
-# Fix: More training epochs or larger batch size
-synth.fit(data, epochs=200, batch_size=512)
-
-# Or: Use conditional generation with rare categories
-synth = Synthesizer(
-    condition_vars=['filing_status', 'has_dependents'],
-    oversample_rare=True,
-)
-```
-
-### Privacy Ratio < 1 (Memorization)
-```python
-# Fix: Add noise or reduce model capacity
-synth = Synthesizer(
-    latent_dim=8,  # Smaller = less memorization
-    dropout=0.3,   # More regularization
-)
-
-# Or: Use differential privacy
-synth = Synthesizer(
-    dp_epsilon=1.0,  # Provable privacy guarantee
-)
-```
-
-## Key Repository
-
-```
-~/RulesFoundation/micro/
-├── src/microplex/
-│   ├── synthesizer.py   # Main Synthesizer class
-│   ├── evaluator.py     # Quality metrics
-│   └── privacy.py       # Privacy-specific metrics
-└── tests/
-    └── test_evaluator.py
-```
-
-## Quality Checklist
-
-- [ ] Privacy ratio > 1.0 (synthetic closer to holdout than training)
-- [ ] Authenticity > 0.85 (realistic records)
-- [ ] Coverage > 0.90 (covers the distribution)
-- [ ] dCor error < 0.10 (preserves correlations)
-- [ ] Variance ratios 0.8-1.2 for key variables
-- [ ] Tested on holdout data (NOT training data)
+Engine requires Python ≥3.12 (microimpute's marker); the
+microcalibrate-backed calibration path requires ≥3.13.
